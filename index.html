@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>習慣養成</title>
 <meta name="description" content="個人習慣養成追蹤工具">
 <meta name="author" content="譯賢">
@@ -318,12 +318,12 @@ if('serviceWorker' in navigator){
   <div class="page active" id="page-home">
     <div class="date-nav">
       <button class="date-nav-btn" id="date-prev" aria-label="前一天">‹</button>
-      <div class="date-nav-center" id="home-date" style="cursor:pointer">
+      <div class="date-nav-center" id="home-date" style="cursor:pointer;position:relative">
         <span id="home-date-label"></span>
+        <input type="date" id="home-date-picker" style="position:absolute;inset:0;width:100%;height:100%;opacity:0.01;border:0;padding:0;cursor:pointer">
       </div>
       <button class="date-nav-btn" id="date-next" aria-label="後一天">›</button>
     </div>
-    <input type="date" id="home-date-picker" style="display:block;width:1px;height:36px;opacity:0.01;border:0;padding:0;margin-top:-36px;margin-left:16px;pointer-events:none">
     <div id="home-today-slots"></div>
     <div id="home-done-wrap" style="display:none">
       <div class="sec-label">已完成</div>
@@ -337,8 +337,10 @@ if('serviceWorker' in navigator){
   <!-- 排程 -->
   <div class="page" id="page-schedule">
     <div id="sched-blocks"></div>
-    <button class="add-date-btn" id="add-date-btn">＋ 增加日期</button>
-    <input type="date" id="date-picker" style="display:block;width:1px;height:36px;opacity:0.01;border:0;padding:0;margin-top:-36px;margin-left:16px;pointer-events:none">
+    <div style="position:relative">
+      <button class="add-date-btn" id="add-date-btn">＋ 增加日期</button>
+      <input type="date" id="date-picker" style="position:absolute;inset:0;width:100%;height:100%;opacity:0.01;border:0;padding:0;cursor:pointer">
+    </div>
     <div class="site-credit">© <span class="cp-year"></span> <a href="https://github.com/WenHsi" target="_blank" rel="noopener noreferrer" class="credit-link">wenhsi</a></div>
   </div>
 
@@ -925,6 +927,7 @@ const Pages={
       const dk=viewDate;const today=dateKey();const isToday=dk===today;
       document.getElementById('home-date-label').textContent=fmtDate(dk);
       document.getElementById('date-next').disabled=isToday;
+      const _dp=document.getElementById('home-date-picker');if(_dp){_dp.value=dk;_dp.max=today;}
       this.renderToday();
       if(isToday){this.renderFocus();this.renderUpcoming();}
       else{document.getElementById('focus-display').innerHTML='';document.getElementById('upcoming-display').innerHTML='';}
@@ -1220,10 +1223,6 @@ function updateUndoBtns(){
 }
 
 function showApp(){
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('bottom-nav').style.display='flex';
-  document.getElementById('app-header').style.display='flex';
   cleanupOrphanHabits();
   updateThemeBtn();
 
@@ -1254,23 +1253,20 @@ function showApp(){
     const d=new Date(viewDate+'T12:00:00');
     d.setDate(d.getDate()+1);viewDate=dateKey(d);Pages.home.render();
   });
+  // Home date picker — overlaid inside #home-date
+  // iOS: 直接點到 input 就開日曆；桌面: click handler 呼叫 showPicker()
   const homeDatePicker=document.getElementById('home-date-picker');
-  document.getElementById('home-date').addEventListener('click',()=>{
-    homeDatePicker.max=dateKey();
-    homeDatePicker.value=viewDate||dateKey();
-    try{homeDatePicker.showPicker()}catch{homeDatePicker.click()}
-  });
+  homeDatePicker.max=dateKey();
+  homeDatePicker.addEventListener('click',()=>{try{homeDatePicker.showPicker()}catch(e){}});
   homeDatePicker.addEventListener('change',()=>{
     if(!homeDatePicker.value)return;
     viewDate=homeDatePicker.value;homeDatePicker.value='';Pages.home.render();
   });
 
-  // Schedule date picker
-  const addDateBtn=document.getElementById('add-date-btn');
+  // Schedule date picker — overlaid inside wrapper
   const datePicker=document.getElementById('date-picker');
-  addDateBtn.addEventListener('click',()=>{
-    datePicker.min=dateKey();try{datePicker.showPicker()}catch{datePicker.click()}
-  });
+  datePicker.min=dateKey();
+  datePicker.addEventListener('click',()=>{try{datePicker.showPicker()}catch(e){}});
   datePicker.addEventListener('change',()=>{if(!datePicker.value)return;Hist.label(`新增排程日期 ${datePicker.value}`);DB.getOrCreateDay(datePicker.value);datePicker.value='';Router.go('schedule')});
 
   // New habit
@@ -1312,7 +1308,21 @@ function showApp(){
     reader.readAsText(file);
   });
 
-  Router.go('home');
+  // 延一幀讓 iOS 算完 env(safe-area-inset-bottom) 再顯示，避免底部 bar 位置跳動
+  requestAnimationFrame(()=>{
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('bottom-nav').style.display='flex';
+    document.getElementById('app-header').style.display='flex';
+    // 初始 render 可能觸發 DB 寫入（如 getOrCreateDay），用 _snap 擋住不產生快照
+    Hist._snap=true;
+    Router.go('home');
+    Hist._snap=false;
+    clearTimeout(Hist._timer);
+    // 全新安裝才建 baseline；已有歷史則保留（跨 session undo/redo 繼續有效）
+    if(Hist._stack().length===0)Hist._snapshot();
+    updateUndoBtns();
+  });
 }
 
 boot();
