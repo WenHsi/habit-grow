@@ -804,12 +804,15 @@ class AC{
     const rect=this.inp.getBoundingClientRect();
     const viewH=window.innerHeight;
     const spaceBelow=viewH-rect.bottom-8;
+    const navH=58;
     if(kbOpen||spaceBelow<150){
       this.dd.style.top='auto';
       this.dd.style.bottom='calc(100% + 4px)';
+      this.dd.style.maxHeight='220px';
     }else{
       this.dd.style.top='calc(100% + 4px)';
       this.dd.style.bottom='auto';
+      this.dd.style.maxHeight=Math.min(220,viewH-rect.bottom-navH-8)+'px';
     }
   }
   render(){
