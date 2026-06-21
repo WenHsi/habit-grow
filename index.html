@@ -298,6 +298,8 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 /* ── Animations ── */
 @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 100%{transform:scale(1)} }
 .popping { animation: pop .22s ease-out; }
+@keyframes flash-highlight { 0%{background:rgba(107,158,139,.25)} 100%{background:transparent} }
+.flash-updated { animation: flash-highlight .9s ease-out; }
 #toast {
   position:fixed; bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 12px);
   left:50%; transform:translateX(-50%) translateY(8px);
@@ -556,6 +558,7 @@ function isHabitReferenced(id){
 
 // ══ MODAL ══
 let _toastTimer=null;
+function flashEl(el){el.classList.remove('flash-updated');void el.offsetWidth;el.classList.add('flash-updated');el.addEventListener('animationend',()=>el.classList.remove('flash-updated'),{once:true});}
 function showToast(msg){
   const el=document.getElementById('toast');if(!el)return;
   el.textContent=msg;el.classList.add('show');
@@ -1137,6 +1140,7 @@ const Pages={
                 if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
               }
               entry.textContent=fmtDateTime(newAt);
+              flashEl(entry);
               attachClick();
             }
             inp.addEventListener('change',save);inp.addEventListener('blur',save);
