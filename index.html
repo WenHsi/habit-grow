@@ -1130,7 +1130,7 @@ const Pages={
         const sec=document.createElement('div');sec.className='group-section';sec.dataset.gid='';
         sec.innerHTML=`<div class="group-header"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
         const items=document.createElement('div');items.className='group-items';
-        ungrouped.forEach(h=>items.appendChild(self.makeHabitItem(h,self)));
+        ungrouped.sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0)).forEach(h=>items.appendChild(self.makeHabitItem(h,self)));
         sec.appendChild(items);wrapper.appendChild(sec);
       }
       cont.appendChild(wrapper);
