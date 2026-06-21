@@ -1333,6 +1333,16 @@ function showApp(){
   });
 }
 
+// iOS 鍵盤彈出時動態調整 body padding，讓 dropdown 不被遮住
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',()=>{
+    const kbH=Math.max(0,window.innerHeight-window.visualViewport.height);
+    document.body.style.paddingBottom=kbH>0
+      ?`calc(${kbH}px + var(--nav) + env(safe-area-inset-bottom))`
+      :`calc(var(--nav) + env(safe-area-inset-bottom))`;
+  });
+}
+
 boot();
 </script>
 </body>
