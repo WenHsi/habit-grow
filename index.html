@@ -203,6 +203,7 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .sort-chip { padding: 4px 11px; border-radius: 20px; border: 1.5px solid var(--border); cursor: pointer; font-size: 12px; font-weight: 600; color: var(--sub); transition: all .15s; }
 .sort-chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
 .stat-item { background: var(--surface); border-radius: var(--r); box-shadow: var(--sh); border: 1px solid var(--border); overflow: hidden; margin-bottom: 4px; }
+.stat-item.is-focus { border-left: 3px solid var(--focus-line); }
 .stat-row { display: flex; align-items: center; padding: 11px 14px; cursor: pointer; gap: 10px; }
 .stat-name { flex: 1; font-size: 15px; }
 .stat-count { font-size: 13px; color: var(--sub); }
@@ -1081,7 +1082,7 @@ const Pages={
 
       function makeStatItem(h){
         const times=(map[h.id]||[]).slice().sort((a,b)=>b.localeCompare(a));
-        return`<div class="stat-item"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${times.length}次</span>${SVG.chev}</div><div class="stat-history">${times.length?times.map(t=>`<div class="hist-entry">${fmtDateTime(t)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
+        return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${times.length}次</span>${SVG.chev}</div><div class="stat-history">${times.length?times.map(t=>`<div class="hist-entry">${fmtDateTime(t)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
       }
 
       if(sk==='group'){
