@@ -161,7 +161,6 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .slot-replace-input { flex: 1; padding: 3px 6px; border: 1.5px solid var(--accent); border-radius: 6px; font-size: 14px; background: var(--surface); }
 .slot-time { font-size: 12px; color: var(--sub); flex-shrink: 0; cursor: pointer; }
 .slot-time:hover { opacity: .7; }
-.slot-time input[type=datetime-local] { border:none;background:transparent;font-size:12px;color:var(--sub);padding:0;font-family:inherit;outline:none;width:auto; }
 .restore-btn { font-size: 12px; color: var(--sub); padding: 2px 7px; border-radius: 6px; }
 .restore-btn:active { background: var(--border); }
 .rm-slot-btn { color: var(--sub); opacity: .4; padding: 3px 5px; font-size: 17px; line-height: 1; flex-shrink: 0; transition: opacity .15s; }
@@ -217,7 +216,6 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .hist-entry:last-child { border-bottom: none; }
 .hist-entry[data-id] { cursor: pointer; transition: background .1s; }
 .hist-entry[data-id]:hover { background: var(--accent-bg); }
-.hist-entry input[type=datetime-local] { width:100%;border:none;background:transparent;font-size:13px;color:var(--sub);padding:0;font-family:inherit;outline:none; }
 
 /* ── Habits Management ── */
 .group-section { margin-bottom: 18px; }
@@ -588,6 +586,29 @@ function showConfirm(title, body, onOk, {okText='刪除',okClass='modal-danger'}
   document.getElementById('confirm-cancel').addEventListener('click',close);
   ov.addEventListener('click',e=>{if(e.target===ov)close();},{once:true});
 }
+function showDateTimeModal(currentValue, onDone){
+  const ov=document.getElementById('modal-overlay');
+  const inp=document.getElementById('modal-input');
+  document.getElementById('modal-title').textContent='修改時間';
+  inp.type='datetime-local';inp.removeAttribute('maxlength');inp.value=currentValue;
+  ov.classList.add('active');
+  setTimeout(()=>inp.focus(),100);
+  function restore(){inp.type='text';inp.maxLength=30;inp.placeholder='群組名稱';}
+  function close(val){
+    ov.classList.remove('active');restore();
+    inp.removeEventListener('keydown',kh);
+    document.getElementById('modal-ok').removeEventListener('click',ok);
+    document.getElementById('modal-cancel').removeEventListener('click',cancel);
+    onDone(val);
+  }
+  function ok(){if(inp.value)close(inp.value);}
+  function cancel(){close(null);}
+  function kh(e){if(e.key==='Enter'){e.preventDefault();ok();}else if(e.key==='Escape')cancel();}
+  document.getElementById('modal-ok').addEventListener('click',ok);
+  document.getElementById('modal-cancel').addEventListener('click',cancel);
+  inp.addEventListener('keydown',kh);
+  ov.addEventListener('click',e=>{if(e.target===ov)cancel();},{once:true});
+}
 function showModal(title, placeholder, onOk, defaultValue=''){
   const ov=document.getElementById('modal-overlay');
   const inp=document.getElementById('modal-input');
@@ -942,38 +963,18 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
       function attachTimeClick(){
         timeEl.addEventListener('click',function onTimeClick(){
           timeEl.removeEventListener('click',onTimeClick);
-          const comp=DB.getCompOnDay(h.id,dk);if(!comp)return;
-          const inp=document.createElement('input');
-          inp.type='datetime-local';inp.value=comp.at.slice(0,16);
-          timeEl.textContent='';timeEl.appendChild(inp);inp.focus();
-          let saved=false;
-          function save(){
-            if(saved)return;saved=true;
-            cleanup();
-            const newAt=inp.value?inp.value+':00':comp.at;
-            if(inp.value&&newAt!==comp.at){
-              const all=DB.comps();const idx=all.findIndex(c=>c.id===comp.id);
-              if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
-              timeEl.textContent=fmtTime(newAt);flashEl(div);
-            } else {
-              timeEl.textContent=fmtTime(comp.at);
+          const comp=DB.getCompOnDay(h.id,dk);if(!comp){attachTimeClick();return;}
+          showDateTimeModal(comp.at.slice(0,16),newVal=>{
+            if(newVal){
+              const newAt=newVal+':00';
+              if(newAt!==comp.at){
+                const all=DB.comps();const idx=all.findIndex(c=>c.id===comp.id);
+                if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+                timeEl.textContent=fmtTime(newAt);flashEl(div);
+              }
             }
             attachTimeClick();
-          }
-          function cancel(e){
-            if(inp.contains(e.target)||!inp.isConnected)return;
-            cleanup();
-            setTimeout(()=>{if(!saved){saved=true;timeEl.textContent=fmtTime(comp.at);attachTimeClick();}},100);
-          }
-          function cleanup(){
-            document.removeEventListener('touchstart',cancel,true);
-            document.removeEventListener('mousedown',cancel,true);
-          }
-          inp.addEventListener('change',save);
-          setTimeout(()=>{
-            document.addEventListener('touchstart',cancel,true);
-            document.addEventListener('mousedown',cancel,true);
-          },200);
+          });
         });
       }
       attachTimeClick();
@@ -1174,38 +1175,18 @@ const Pages={
             entry.removeEventListener('click',onClick);
             const cid=entry.dataset.id;
             const comp=DB.comps().find(c=>c.id===cid);
-            if(!comp)return;
-            const inp=document.createElement('input');
-            inp.type='datetime-local';inp.value=comp.at.slice(0,16);
-            entry.textContent='';entry.appendChild(inp);inp.focus();
-            let saved=false;
-            function save(){
-              if(saved)return;saved=true;
-              cleanup();
-              const newAt=inp.value?inp.value+':00':comp.at;
-              if(inp.value&&newAt!==comp.at){
-                const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
-                if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
-                entry.textContent=fmtDateTime(newAt);flashEl(entry);
-              } else {
-                entry.textContent=fmtDateTime(comp.at);
+            if(!comp){attachClick();return;}
+            showDateTimeModal(comp.at.slice(0,16),newVal=>{
+              if(newVal){
+                const newAt=newVal+':00';
+                if(newAt!==comp.at){
+                  const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
+                  if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+                  entry.textContent=fmtDateTime(newAt);flashEl(entry);
+                }
               }
               attachClick();
-            }
-            function cancel(e){
-              if(inp.contains(e.target)||!inp.isConnected)return;
-              cleanup();
-              setTimeout(()=>{if(!saved){saved=true;entry.textContent=fmtDateTime(comp.at);attachClick();}},100);
-            }
-            function cleanup(){
-              document.removeEventListener('touchstart',cancel,true);
-              document.removeEventListener('mousedown',cancel,true);
-            }
-            inp.addEventListener('change',save);
-            setTimeout(()=>{
-              document.addEventListener('touchstart',cancel,true);
-              document.addEventListener('mousedown',cancel,true);
-            },200);
+            });
           });
         }
         attachClick();
