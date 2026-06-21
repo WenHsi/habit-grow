@@ -1089,11 +1089,11 @@ const Pages={
         const groupMap={};habits.forEach(h=>{const gid=h.groupId||'';if(!groupMap[gid])groupMap[gid]=[];groupMap[gid].push(h)});
         let html='';
         groups.forEach(g=>{
-          const hs=groupMap[g.id]||[];if(!hs.length)return;
+          const hs=(groupMap[g.id]||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));if(!hs.length)return;
           html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label">${g.name}</div><div class="group-line"></div></div>`;
           html+=hs.map(makeStatItem).join('');
         });
-        const ungrouped=groupMap['']||[];
+        const ungrouped=(groupMap['']||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));
         if(ungrouped.length){
           html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
           html+=ungrouped.map(makeStatItem).join('');
