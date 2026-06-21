@@ -159,7 +159,9 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .slot-name:hover { background: rgba(0,0,0,.05); }
 .slot-item.done .slot-name { cursor: default; }
 .slot-replace-input { flex: 1; padding: 3px 6px; border: 1.5px solid var(--accent); border-radius: 6px; font-size: 14px; background: var(--surface); }
-.slot-time { font-size: 12px; color: var(--sub); flex-shrink: 0; }
+.slot-time { font-size: 12px; color: var(--sub); flex-shrink: 0; cursor: pointer; }
+.slot-time:hover { opacity: .7; }
+.slot-time input[type=datetime-local] { border:none;background:transparent;font-size:12px;color:var(--sub);padding:0;font-family:inherit;outline:none;width:auto; }
 .restore-btn { font-size: 12px; color: var(--sub); padding: 2px 7px; border-radius: 6px; }
 .restore-btn:active { background: var(--border); }
 .rm-slot-btn { color: var(--sub); opacity: .4; padding: 3px 5px; font-size: 17px; line-height: 1; flex-shrink: 0; transition: opacity .15s; }
@@ -672,6 +674,10 @@ const DB={
     const f=this.comps().filter(c=>c.habitId===id&&c.at.slice(0,10)===dk);
     return f.length?f[f.length-1].at:null;
   },
+  getCompOnDay(id,dk){
+    const f=this.comps().filter(c=>c.habitId===id&&c.at.slice(0,10)===dk);
+    return f.length?f[f.length-1]:null;
+  },
   addCompOnDay(habitId,dk){
     const c=this.comps();
     const at=dk===dateKey()?localISO():dk+'T12:00:00';
@@ -930,6 +936,32 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
       div.querySelector('.check-btn').addEventListener('click',()=>{
         Hist.label(`取消打勾「${h.name}」`);DB.removeComp(h.id,dk);showToast(`取消「${h.name}」`);onChange();
       });
+    }
+    const timeEl=div.querySelector('.slot-time');
+    if(timeEl){
+      function attachTimeClick(){
+        timeEl.addEventListener('click',function onTimeClick(){
+          timeEl.removeEventListener('click',onTimeClick);
+          const comp=DB.getCompOnDay(h.id,dk);if(!comp)return;
+          const inp=document.createElement('input');
+          inp.type='datetime-local';inp.value=comp.at.slice(0,16);
+          timeEl.textContent='';timeEl.appendChild(inp);inp.focus();
+          let saved=false;
+          function save(){
+            if(saved)return;saved=true;
+            const newAt=inp.value?inp.value+':00':comp.at;
+            if(inp.value){
+              const all=DB.comps();const idx=all.findIndex(c=>c.id===comp.id);
+              if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+            }
+            timeEl.textContent=fmtTime(newAt);
+            flashEl(div);
+            attachTimeClick();
+          }
+          inp.addEventListener('change',save);inp.addEventListener('blur',save);
+        });
+      }
+      attachTimeClick();
     }
   } else {
     // Pending: drag handle + checkbox + name (click to replace) + ×
