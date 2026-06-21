@@ -802,7 +802,8 @@ class AC{
     this.dd.style.display='block';
     // Flip up if near bottom of viewport
     const rect=this.inp.getBoundingClientRect();
-    const spaceBelow=window.innerHeight-rect.bottom-64;
+    const viewH=(window.visualViewport?window.visualViewport.height:window.innerHeight);
+    const spaceBelow=viewH-rect.bottom-64;
     if(spaceBelow<150){this.dd.style.top='auto';this.dd.style.bottom='calc(100% + 4px)';}
     else{this.dd.style.top='calc(100% + 4px)';this.dd.style.bottom='auto';}
     this.dd.querySelectorAll('.ac-item').forEach((el,i)=>{
