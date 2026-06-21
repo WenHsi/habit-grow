@@ -246,6 +246,8 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 
 .add-group-btn { width: 100%; padding: 10px; border: 1.5px dashed var(--border); border-radius: 9px; color: var(--sub); font-size: 13px; text-align: center; cursor: pointer; margin-top: 6px; background: transparent; transition: all .15s; }
 .add-group-btn:hover { border-color: var(--accent); color: var(--accent); }
+.clean-habits-btn { padding: 6px 0; border: none; color: var(--danger); font-size: 12px; text-align: right; cursor: pointer; margin-top: 8px; background: transparent; display: block; width: 100%; opacity: .7; transition: opacity .15s; }
+.clean-habits-btn:hover { opacity: 1; }
 
 /* ── Modal ── */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 400; align-items: center; justify-content: center; padding: 24px; }
@@ -455,7 +457,7 @@ const S = {
   get(k,d=null){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch{return d}},
   set(k,v){localStorage.setItem(k,JSON.stringify(v))},
 };
-const K = {pw:'h_pw',sess:'h_sess',habits:'h_habits',groups:'h_groups',comps:'h_comps',scheds:'h_scheds',statsort:'h_ss',theme:'h_theme',hist:'h_hist',hidx:'h_hidx'};
+const K = {pw:'h_pw',sess:'h_sess',habits:'h_habits',groups:'h_groups',comps:'h_comps',scheds:'h_scheds',statsort:'h_ss',theme:'h_theme',hist:'h_hist',hidx:'h_hidx',autofocus:'h_autofocus'};
 
 // ══ HISTORY ══
 const Hist={
@@ -542,6 +544,12 @@ function fmtDateTime(iso){const d=new Date(iso);return`${d.getFullYear()}/${d.ge
 function fmtTime(iso){const d=new Date(iso);return`${pad(d.getHours())}:${pad(d.getMinutes())}`}
 async function sha256(str){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
+// 習慣是否有排程或完成記錄（無引用才可直接刪除）
+function isHabitReferenced(id){
+  if(DB.comps().some(c=>c.habitId===id))return true;
+  return Object.values(DB.scheds()).some(ids=>ids.includes(id));
+}
+
 // ══ MODAL ══
 let _toastTimer=null;
 function showToast(msg){
@@ -563,7 +571,7 @@ function showConfirm(title, body, onOk, {okText='刪除',okClass='modal-danger'}
   document.getElementById('confirm-ok').className=okClass;
   const ov=document.getElementById('confirm-overlay');
   document.getElementById('confirm-title').textContent=title;
-  document.getElementById('confirm-body').textContent=body;
+  document.getElementById('confirm-body').innerHTML=body;
   ov.classList.add('active');
   function close(){ov.classList.remove('active');document.getElementById('confirm-ok').removeEventListener('click',ok);document.getElementById('confirm-cancel').removeEventListener('click',close);}
   function ok(){close();onOk();}
@@ -602,11 +610,12 @@ const DB={
     const focusIds=this.habits().filter(h=>h.isFocus).map(h=>h.id);
     if(!sc[dk]){
       sc[dk]=[...focusIds];
+      focusIds.forEach(id=>this.addAutoFocus(dk,id));
     } else {
       // prepend focus habits not yet in list, no duplicates
       const existing=new Set(sc[dk]);
       const missing=focusIds.filter(id=>!existing.has(id));
-      if(missing.length)sc[dk]=[...missing,...sc[dk]];
+      if(missing.length){sc[dk]=[...missing,...sc[dk]];missing.forEach(id=>this.addAutoFocus(dk,id));}
     }
     this.saveScheds(sc);
     return[...sc[dk]];
@@ -617,14 +626,19 @@ const DB={
     for(const id of ids){if(!seen.has(id)){seen.add(id);deduped.push(id)}}
     const sc=this.scheds();sc[dk]=deduped;this.saveScheds(sc);
   },
+  // 自動注入（重點培養）記錄
+  autofocus(){return S.get(K.autofocus,{})},
+  addAutoFocus(dk,id){const m=this.autofocus();if(!m[dk])m[dk]=[];if(!m[dk].includes(id))m[dk].push(id);S.set(K.autofocus,m)},
+  removeAutoFocus(dk,id){const m=this.autofocus();if(m[dk])m[dk]=m[dk].filter(x=>x!==id);S.set(K.autofocus,m)},
   // When focus changes, sync schedules
   syncFocusChange(habitId, nowFocus){
     if(nowFocus)return; // getOrCreateDay will auto-add on next render
-    const today=dateKey();const sc=this.scheds();const comps=this.comps();
+    const today=dateKey();const sc=this.scheds();const comps=this.comps();const af=this.autofocus();
     Object.keys(sc).filter(dk=>dk>=today).forEach(dk=>{
-      // keep if habit was completed on this day (still needs to show in done section)
       const completedOnDay=comps.some(c=>c.habitId===habitId&&c.at.slice(0,10)===dk);
-      if(!completedOnDay)sc[dk]=sc[dk].filter(id=>id!==habitId);
+      const wasAutoAdded=(af[dk]||[]).includes(habitId);
+      // 只移除「自動注入且未完成」的，手動加入的保留
+      if(!completedOnDay&&wasAutoAdded)sc[dk]=sc[dk].filter(id=>id!==habitId);
     });
     this.saveScheds(sc);
   },
@@ -874,7 +888,12 @@ function startSlotReplace(div,currentId,dk,onChange){
     onSelect(opt){
       const newId=resolveOpt(opt);
       const order=DB.getDay(dk)||[];const idx=order.indexOf(currentId);
-      if(idx!==-1){order[idx]=newId;DB.setDay(dk,order)}
+      if(idx!==-1){
+        const oldName=DB.hmap()[currentId]?.name||'';
+        order[idx]=newId;DB.setDay(dk,order);
+        Hist.label(`替換排程「${oldName}」→「${opt.label}」`);
+        showToast(`已替換為「${opt.label}」`);
+      }
       onChange();
     },
     allowCreate:true,
@@ -901,7 +920,7 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
     `;
     if(showCheck){
       div.querySelector('.check-btn').addEventListener('click',()=>{
-        Hist.label(`取消打勾「${h.name}」`);DB.removeComp(h.id,dk);onChange();
+        Hist.label(`取消打勾「${h.name}」`);DB.removeComp(h.id,dk);showToast(`取消「${h.name}」`);onChange();
       });
     }
   } else {
@@ -915,11 +934,11 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
     if(showCheck){
       div.querySelector('.check-btn').addEventListener('click',()=>{
         div.querySelector('.check-btn').classList.add('on','popping');
-        Hist.label(`打勾「${h.name}」`);DB.addCompOnDay(h.id,dk);setTimeout(onChange,300);
+        Hist.label(`打勾「${h.name}」`);DB.addCompOnDay(h.id,dk);showToast(`完成「${h.name}」`);setTimeout(onChange,300);
       });
     }
     div.querySelector('.rm-slot-btn').addEventListener('click',()=>{
-      Hist.label(`移除排程「${h.name}」`);DB.setDay(dk,(DB.getDay(dk)||[]).filter(id=>id!==h.id));onChange();
+      Hist.label(`移除排程「${h.name}」`);DB.setDay(dk,(DB.getDay(dk)||[]).filter(id=>id!==h.id));DB.removeAutoFocus(dk,h.id);showToast(`已移除「${h.name}」`);onChange();
     });
     div.querySelector('.slot-name').addEventListener('click',()=>startSlotReplace(div,h.id,dk,onChange));
   }
@@ -949,7 +968,7 @@ function renderDaySlots(container,dk,{showCheck=false}={},onUpdate){
     getOptions(q){const cur=new Set(DB.getDay(dk)||[]);return getHabitOptions(q,[...cur])},
     onSelect(opt){
       const id=resolveOpt(opt);const ord=DB.getOrCreateDay(dk);
-      if(!ord.includes(id)){Hist.label(`新增「${opt.label}」到排程`);DB.setDay(dk,[...ord,id]);}refresh();
+      if(!ord.includes(id)){Hist.label(`新增「${opt.label}」到排程`);DB.setDay(dk,[...ord,id]);showToast(`已加入「${opt.label}」`);}refresh();
     }
   });
 }
@@ -1039,7 +1058,7 @@ const Pages={
         block.appendChild(slots);cont.appendChild(block);
         hdr.querySelector('.remove-day-btn')?.addEventListener('click',()=>{
           showConfirm(`移除「${fmtDate(dk)}」的排程？`,'此日期的所有習慣排程將被移除',()=>{
-            Hist.label(`移除排程日期 ${fmtDate(dk)}`);const sc=DB.scheds();delete sc[dk];DB.saveScheds(sc);self.render();
+            Hist.label(`移除排程日期 ${fmtDate(dk)}`);const sc=DB.scheds();delete sc[dk];DB.saveScheds(sc);showToast(`已移除 ${fmtDate(dk)} 的排程`);self.render();
           });
         });
       });
@@ -1110,10 +1129,24 @@ const Pages={
       const addGBtn=document.createElement('button');addGBtn.className='add-group-btn';addGBtn.textContent='＋ 新增群組';
       addGBtn.addEventListener('click',()=>{
         showModal('新增群組','群組名稱',name=>{
-          Hist.label(`新增群組「${name}」`);const all=DB.groups();all.push({id:uid(),name,order:all.length});DB.saveGroups(all);self.render();
+          Hist.label(`新增群組「${name}」`);const all=DB.groups();all.push({id:uid(),name,order:all.length});DB.saveGroups(all);showToast(`已新增群組「${name}」`);self.render();
         });
       });
       cont.appendChild(addGBtn);
+      // 清除閒置習慣
+      const cleanBtn=document.createElement('button');cleanBtn.className='clean-habits-btn';cleanBtn.textContent='清除閒置習慣';
+      cleanBtn.addEventListener('click',()=>{
+        const idle=DB.habits().filter(h=>!isHabitReferenced(h.id));
+        if(!idle.length){showAlert('沒有閒置習慣','所有習慣都有排程或記錄');return;}
+        const nameList=idle.map(h=>`<span style="display:block;padding:2px 0">· ${h.name}</span>`).join('');
+        showConfirm(`清除 ${idle.length} 個閒置習慣？`,`${nameList}<span style="display:block;margin-top:8px;color:var(--sub);font-size:12px">這些習慣沒有任何排程與記錄</span>`,()=>{
+          Hist.label(`清除 ${idle.length} 個閒置習慣`);
+          const idSet=new Set(idle.map(h=>h.id));
+          DB.saveHabits(DB.habits().filter(h=>!idSet.has(h.id)));
+          idle.forEach(h=>DB.cleanupHabit(h.id));showToast(`已清除 ${idle.length} 個閒置習慣`);self.render();
+        });
+      });
+      cont.appendChild(cleanBtn);
     },
     makeGroupSection(g,habitList,self){
       const sec=document.createElement('div');sec.className='group-section';sec.dataset.gid=g.id;sec.dataset.id=g.id;
@@ -1123,14 +1156,14 @@ const Pages={
         e.stopPropagation();
         showModal('更改群組名稱','新名稱',name=>{
           Hist.label(`重新命名群組「${g.name}」→「${name}」`);const all=DB.groups();const idx=all.findIndex(x=>x.id===g.id);
-          if(idx!==-1){all[idx].name=name;DB.saveGroups(all)}self.render();
+          if(idx!==-1){all[idx].name=name;DB.saveGroups(all);showToast(`群組已更名為「${name}」`)}self.render();
         },g.name);
       });
       hdr.querySelector('[data-del]').addEventListener('click',e=>{
         e.stopPropagation();
         showConfirm(`刪除群組「${g.name}」？`,`群組內習慣將移至未分類`,()=>{
           Hist.label(`刪除群組「${g.name}」`);const ah=DB.habits();ah.filter(h=>h.groupId===g.id).forEach(h=>h.groupId=null);DB.saveHabits(ah);
-          DB.saveGroups(DB.groups().filter(x=>x.id!==g.id));self.render();
+          DB.saveGroups(DB.groups().filter(x=>x.id!==g.id));showToast(`已刪除群組「${g.name}」`);self.render();
         });
       });
       sec.appendChild(hdr);
@@ -1152,22 +1185,29 @@ const Pages={
         const nameEl=div.querySelector('.mgmt-name');
         const inp=document.createElement('input');inp.className='mgmt-name-input';inp.value=h.name;
         nameEl.replaceWith(inp);inp.focus();inp.select();
-        function save(){const v=inp.value.trim();if(v&&v!==h.name){Hist.label(`重新命名「${h.name}」→「${v}」`);const all=DB.habits();const idx=all.findIndex(x=>x.id===h.id);if(idx!==-1){all[idx].name=v;DB.saveHabits(all)}}self.render()}
+        function save(){const v=inp.value.trim();if(v&&v!==h.name){Hist.label(`重新命名「${h.name}」→「${v}」`);const all=DB.habits();const idx=all.findIndex(x=>x.id===h.id);if(idx!==-1){all[idx].name=v;DB.saveHabits(all);showToast(`已更名為「${v}」`)}}self.render()}
         inp.addEventListener('blur',save);
         inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=h.name;inp.blur()}});
       });
       // focus toggle
       div.querySelector('.focus-toggle').addEventListener('click',()=>{
         const all=DB.habits();const idx=all.findIndex(x=>x.id===h.id);
-        if(idx!==-1){const nowFocus=!all[idx].isFocus;Hist.label(`${nowFocus?'設為':'取消'}重點培養「${h.name}」`);all[idx].isFocus=nowFocus;DB.saveHabits(all);DB.syncFocusChange(h.id,nowFocus);}
+        if(idx!==-1){const nowFocus=!all[idx].isFocus;Hist.label(`${nowFocus?'設為':'取消'}重點培養「${h.name}」`);all[idx].isFocus=nowFocus;DB.saveHabits(all);DB.syncFocusChange(h.id,nowFocus);showToast(nowFocus?`「${h.name}」設為重點培養`:`「${h.name}」取消重點培養`);}
         self.render();
       });
       // delete
       div.querySelector('.del-btn').addEventListener('click',()=>{
-        showConfirm(`刪除「${h.name}」？`,`排程與統計將一併移除`,()=>{
-          Hist.label(`刪除習慣「${h.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
-          DB.cleanupHabit(h.id);self.render();
-        });
+        if(!isHabitReferenced(h.id)){
+          // 無引用，直接刪除
+          Hist.label(`刪除習慣「${h.name}」`);
+          DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
+          DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
+        }else{
+          showConfirm(`刪除「${h.name}」？`,`排程與統計將一併移除`,()=>{
+            Hist.label(`刪除習慣「${h.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
+            DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
+          });
+        }
       });
       return div;
     }
@@ -1291,14 +1331,14 @@ function showApp(){
   const datePicker=document.getElementById('date-picker');
   datePicker.min=dateKey();
   datePicker.addEventListener('click',()=>{try{datePicker.showPicker()}catch(e){}});
-  datePicker.addEventListener('change',()=>{if(!datePicker.value)return;Hist.label(`新增排程日期 ${datePicker.value}`);DB.getOrCreateDay(datePicker.value);datePicker.value='';Router.go('schedule')});
+  datePicker.addEventListener('change',()=>{if(!datePicker.value)return;Hist.label(`新增排程日期 ${datePicker.value}`);DB.getOrCreateDay(datePicker.value);showToast(`已新增 ${datePicker.value} 排程`);datePicker.value='';Router.go('schedule')});
 
   // New habit
   const ni=document.getElementById('new-habit-input'),nb=document.getElementById('new-habit-btn');
   function addNewHabit(){
     const name=ni.value.trim();if(!name)return;
     if(DB.habits().find(h=>h.name===name)){showAlert('已有相同名稱','請使用不同的習慣名稱');return}
-    Hist.label(`新增習慣「${name}」`);const all=DB.habits();all.push(createHabit(name));DB.saveHabits(all);ni.value='';Pages.habits.render();
+    Hist.label(`新增習慣「${name}」`);const all=DB.habits();all.push(createHabit(name));DB.saveHabits(all);ni.value='';showToast(`已新增「${name}」`);Pages.habits.render();
   }
   nb.addEventListener('click',addNewHabit);ni.addEventListener('keydown',e=>{if(e.key==='Enter')addNewHabit()});
 
