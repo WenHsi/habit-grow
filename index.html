@@ -949,16 +949,31 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
           let saved=false;
           function save(){
             if(saved)return;saved=true;
+            cleanup();
             const newAt=inp.value?inp.value+':00':comp.at;
-            if(inp.value){
+            if(inp.value&&newAt!==comp.at){
               const all=DB.comps();const idx=all.findIndex(c=>c.id===comp.id);
               if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+              timeEl.textContent=fmtTime(newAt);flashEl(div);
+            } else {
+              timeEl.textContent=fmtTime(comp.at);
             }
-            timeEl.textContent=fmtTime(newAt);
-            flashEl(div);
             attachTimeClick();
           }
-          inp.addEventListener('change',save);inp.addEventListener('blur',save);
+          function cancel(e){
+            if(inp.contains(e.target)||!inp.isConnected)return;
+            cleanup();
+            setTimeout(()=>{if(!saved){saved=true;timeEl.textContent=fmtTime(comp.at);attachTimeClick();}},100);
+          }
+          function cleanup(){
+            document.removeEventListener('touchstart',cancel,true);
+            document.removeEventListener('mousedown',cancel,true);
+          }
+          inp.addEventListener('change',save);
+          setTimeout(()=>{
+            document.addEventListener('touchstart',cancel,true);
+            document.addEventListener('mousedown',cancel,true);
+          },200);
         });
       }
       attachTimeClick();
@@ -1166,16 +1181,31 @@ const Pages={
             let saved=false;
             function save(){
               if(saved)return;saved=true;
+              cleanup();
               const newAt=inp.value?inp.value+':00':comp.at;
-              if(inp.value){
+              if(inp.value&&newAt!==comp.at){
                 const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
                 if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+                entry.textContent=fmtDateTime(newAt);flashEl(entry);
+              } else {
+                entry.textContent=fmtDateTime(comp.at);
               }
-              entry.textContent=fmtDateTime(newAt);
-              flashEl(entry);
               attachClick();
             }
-            inp.addEventListener('change',save);inp.addEventListener('blur',save);
+            function cancel(e){
+              if(inp.contains(e.target)||!inp.isConnected)return;
+              cleanup();
+              setTimeout(()=>{if(!saved){saved=true;entry.textContent=fmtDateTime(comp.at);attachClick();}},100);
+            }
+            function cleanup(){
+              document.removeEventListener('touchstart',cancel,true);
+              document.removeEventListener('mousedown',cancel,true);
+            }
+            inp.addEventListener('change',save);
+            setTimeout(()=>{
+              document.addEventListener('touchstart',cancel,true);
+              document.addEventListener('mousedown',cancel,true);
+            },200);
           });
         }
         attachClick();
