@@ -170,7 +170,7 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .ac-input { width: 100%; padding: 9px 12px; border: 1.5px dashed var(--border); border-radius: 8px; background: transparent; font-size: 14px; color: var(--sub); transition: all .15s; }
 .ac-input::placeholder { color: var(--done); }
 .ac-input:focus { border-color: var(--accent); border-style: solid; color: var(--text); }
-.ac-dropdown, .slot-replace-dd { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 4px 16px rgba(0,0,0,.1); z-index: 60; overflow: hidden; max-height: 220px; overflow-y: auto; }
+.ac-dropdown, .slot-replace-dd { display: none; position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 4px 16px rgba(0,0,0,.18); z-index: 500; overflow: hidden; max-height: 220px; overflow-y: auto; }
 .slot-replace-dd { top: 100%; margin-top: 2px; }
 .ac-item { padding: 9px 14px; font-size: 14px; cursor: pointer; transition: background .1s; }
 .ac-item.hl { background: var(--accent-bg); }
@@ -786,6 +786,8 @@ class AC{
     inp.addEventListener('focus',()=>this.update());
     inp.addEventListener('keydown',e=>this.onKey(e));
     document.addEventListener('click',e=>{if(!inp.contains(e.target)&&!dd.contains(e.target))this.close()},true);
+    // 鍵盤升起時重新計算 dropdown 位置
+    if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>this._reposition());
   }
   update(){
     const q=this.inp.value.trim().toLowerCase();
@@ -794,18 +796,30 @@ class AC{
       this.opts.push({type:'create',label:this.inp.value.trim()});
     this.hl=-1;this.render();
   }
+  _reposition(){
+    if(this.dd.style.display==='none'||!this.dd.style.display)return;
+    const rect=this.inp.getBoundingClientRect();
+    const viewH=window.visualViewport?window.visualViewport.height:window.innerHeight;
+    const spaceBelow=viewH-rect.bottom-8;
+    // position:fixed — 用 viewport 座標定位，不受鍵盤遮擋影響
+    this.dd.style.left=rect.left+'px';
+    this.dd.style.width=rect.width+'px';
+    this.dd.style.right='auto';
+    if(spaceBelow<150){
+      this.dd.style.top='auto';
+      this.dd.style.bottom=(viewH-rect.top+4)+'px';
+    }else{
+      this.dd.style.top=(rect.bottom+4)+'px';
+      this.dd.style.bottom='auto';
+    }
+  }
   render(){
     if(!this.opts.length){this.close();return}
     this.dd.innerHTML=this.opts.map((o,i)=>
       `<div class="ac-item${o.type==='create'?' new':''}" data-i="${i}">${o.type==='create'?`新增「${o.label}」`:o.label}</div>`
     ).join('');
     this.dd.style.display='block';
-    // Flip up if near bottom of viewport
-    const rect=this.inp.getBoundingClientRect();
-    const viewH=(window.visualViewport?window.visualViewport.height:window.innerHeight);
-    const spaceBelow=viewH-rect.bottom-64;
-    if(spaceBelow<150){this.dd.style.top='auto';this.dd.style.bottom='calc(100% + 4px)';}
-    else{this.dd.style.top='calc(100% + 4px)';this.dd.style.bottom='auto';}
+    this._reposition();
     this.dd.querySelectorAll('.ac-item').forEach((el,i)=>{
       el.addEventListener('mousedown',e=>e.preventDefault());
       el.addEventListener('click',()=>this.select(i));
