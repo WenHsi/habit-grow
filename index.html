@@ -587,11 +587,12 @@ function showModal(title, placeholder, onOk, defaultValue=''){
   inp.placeholder=placeholder;inp.value=defaultValue;
   ov.classList.add('active');
   setTimeout(()=>inp.focus(),100);
-  function close(){ov.classList.remove('active');document.getElementById('modal-ok').removeEventListener('click',ok);document.getElementById('modal-cancel').removeEventListener('click',close);}
+  function close(){ov.classList.remove('active');inp.removeEventListener('keydown',kh);document.getElementById('modal-ok').removeEventListener('click',ok);document.getElementById('modal-cancel').removeEventListener('click',close);}
   function ok(){const v=inp.value.trim();if(!v)return;close();onOk(v);}
+  function kh(e){if(e.key==='Enter'){e.preventDefault();ok();}else if(e.key==='Escape')close();}
   document.getElementById('modal-ok').addEventListener('click',ok);
   document.getElementById('modal-cancel').addEventListener('click',close);
-  inp.addEventListener('keydown',function h(e){if(e.key==='Enter')ok();if(e.key==='Escape')close();},{once:true});
+  inp.addEventListener('keydown',kh);
   ov.addEventListener('click',e=>{if(e.target===ov)close();},{once:true});
 }
 
