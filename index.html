@@ -213,6 +213,9 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .stat-item.open .stat-history { display: block; }
 .hist-entry { padding: 7px 14px; font-size: 13px; color: var(--sub); border-bottom: 1px solid var(--border); }
 .hist-entry:last-child { border-bottom: none; }
+.hist-entry[data-id] { cursor: pointer; transition: background .1s; }
+.hist-entry[data-id]:hover { background: var(--accent-bg); }
+.hist-entry input[type=datetime-local] { width:100%;border:none;background:transparent;font-size:13px;color:var(--sub);padding:0;font-family:inherit;outline:none; }
 
 /* ── Habits Management ── */
 .group-section { margin-bottom: 18px; }
@@ -1079,11 +1082,11 @@ const Pages={
       const habits=DB.habits();const comps=DB.comps();const el=document.getElementById('stats-list');
       if(!habits.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📊</div>還沒有習慣統計</div>`;return}
       const map={};habits.forEach(h=>{map[h.id]=[]});
-      comps.forEach(c=>{if(map[c.habitId])map[c.habitId].push(c.at)});
+      comps.forEach(c=>{if(map[c.habitId])map[c.habitId].push(c)});
 
       function makeStatItem(h){
-        const times=(map[h.id]||[]).slice().sort((a,b)=>b.localeCompare(a));
-        return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${times.length}次</span>${SVG.chev}</div><div class="stat-history">${times.length?times.map(t=>`<div class="hist-entry">${fmtDateTime(t)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
+        const hc=(map[h.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
+        return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${hc.length}次</span>${SVG.chev}</div><div class="stat-history">${hc.length?hc.map(c=>`<div class="hist-entry" data-id="${c.id}">${fmtDateTime(c.at)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
       }
 
       if(sk==='group'){
@@ -1106,14 +1109,40 @@ const Pages={
         if(sk==='count')sorted.sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
         else if(sk==='name')sorted.sort((a,b)=>a.name.localeCompare(b.name,'zh'));
         else if(sk==='recent')sorted.sort((a,b)=>{
-          const al=(map[a.id]||[]).slice().sort().pop()||'';
-          const bl=(map[b.id]||[]).slice().sort().pop()||'';
+          const al=(map[a.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
+          const bl=(map[b.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
           return bl.localeCompare(al);
         });
         el.innerHTML=sorted.map(makeStatItem).join('');
       }
       el.querySelectorAll('.stat-item').forEach(item=>{
         item.querySelector('.stat-row').addEventListener('click',()=>item.classList.toggle('open'));
+      });
+      el.querySelectorAll('.hist-entry[data-id]').forEach(entry=>{
+        function attachClick(){
+          entry.addEventListener('click',function onClick(){
+            entry.removeEventListener('click',onClick);
+            const cid=entry.dataset.id;
+            const comp=DB.comps().find(c=>c.id===cid);
+            if(!comp)return;
+            const inp=document.createElement('input');
+            inp.type='datetime-local';inp.value=comp.at.slice(0,16);
+            entry.textContent='';entry.appendChild(inp);inp.focus();
+            let saved=false;
+            function save(){
+              if(saved)return;saved=true;
+              const newAt=inp.value?inp.value+':00':comp.at;
+              if(inp.value){
+                const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
+                if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
+              }
+              entry.textContent=fmtDateTime(newAt);
+              attachClick();
+            }
+            inp.addEventListener('change',save);inp.addEventListener('blur',save);
+          });
+        }
+        attachClick();
       });
     }
   },
