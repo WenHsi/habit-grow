@@ -208,7 +208,7 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .stat-count { font-size: 13px; color: var(--sub); }
 .stat-chev { color: var(--sub); transition: transform .2s; flex-shrink: 0; }
 .stat-item.open .stat-chev { transform: rotate(90deg); }
-.stat-history { display: none; border-top: 1px solid var(--border); }
+.stat-history { display: none; border-top: 1px solid var(--border); max-height: calc(34px * 3); overflow-y: auto; }
 .stat-item.open .stat-history { display: block; }
 .hist-entry { padding: 7px 14px; font-size: 13px; color: var(--sub); border-bottom: 1px solid var(--border); }
 .hist-entry:last-child { border-bottom: none; }
@@ -1071,25 +1071,45 @@ const Pages={
     render(){
       const sk=this.sort();
       const chips=document.getElementById('stats-sort-chips');
-      chips.innerHTML=[{k:'count',l:'次數'},{k:'name',l:'名稱'},{k:'recent',l:'最新更新'}]
+      chips.innerHTML=[{k:'count',l:'次數'},{k:'name',l:'名稱'},{k:'recent',l:'最新更新'},{k:'group',l:'群組'}]
         .map(s=>`<button class="sort-chip${sk===s.k?' on':''}" data-s="${s.k}">${s.l}</button>`).join('');
       chips.querySelectorAll('.sort-chip').forEach(btn=>btn.addEventListener('click',()=>{S.set(K.statsort,btn.dataset.s);this.render()}));
       const habits=DB.habits();const comps=DB.comps();const el=document.getElementById('stats-list');
       if(!habits.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📊</div>還沒有習慣統計</div>`;return}
       const map={};habits.forEach(h=>{map[h.id]=[]});
       comps.forEach(c=>{if(map[c.habitId])map[c.habitId].push(c.at)});
-      let sorted=[...habits];
-      if(sk==='count')sorted.sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
-      else if(sk==='name')sorted.sort((a,b)=>a.name.localeCompare(b.name,'zh'));
-      else if(sk==='recent')sorted.sort((a,b)=>{
-        const al=(map[a.id]||[]).slice().sort().pop()||'';
-        const bl=(map[b.id]||[]).slice().sort().pop()||'';
-        return bl.localeCompare(al);
-      });
-      el.innerHTML=sorted.map(h=>{
+
+      function makeStatItem(h){
         const times=(map[h.id]||[]).slice().sort((a,b)=>b.localeCompare(a));
         return`<div class="stat-item"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${times.length}次</span>${SVG.chev}</div><div class="stat-history">${times.length?times.map(t=>`<div class="hist-entry">${fmtDateTime(t)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
-      }).join('');
+      }
+
+      if(sk==='group'){
+        const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
+        const groupMap={};habits.forEach(h=>{const gid=h.groupId||'';if(!groupMap[gid])groupMap[gid]=[];groupMap[gid].push(h)});
+        let html='';
+        groups.forEach(g=>{
+          const hs=groupMap[g.id]||[];if(!hs.length)return;
+          html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label">${g.name}</div><div class="group-line"></div></div>`;
+          html+=hs.map(makeStatItem).join('');
+        });
+        const ungrouped=groupMap['']||[];
+        if(ungrouped.length){
+          html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
+          html+=ungrouped.map(makeStatItem).join('');
+        }
+        el.innerHTML=html;
+      }else{
+        let sorted=[...habits];
+        if(sk==='count')sorted.sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
+        else if(sk==='name')sorted.sort((a,b)=>a.name.localeCompare(b.name,'zh'));
+        else if(sk==='recent')sorted.sort((a,b)=>{
+          const al=(map[a.id]||[]).slice().sort().pop()||'';
+          const bl=(map[b.id]||[]).slice().sort().pop()||'';
+          return bl.localeCompare(al);
+        });
+        el.innerHTML=sorted.map(makeStatItem).join('');
+      }
       el.querySelectorAll('.stat-item').forEach(item=>{
         item.querySelector('.stat-row').addEventListener('click',()=>item.classList.toggle('open'));
       });
