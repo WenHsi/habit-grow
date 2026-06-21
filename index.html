@@ -801,20 +801,23 @@ class AC{
     // 鍵盤偵測：visualViewport.height 縮小超過 100px 代表鍵盤已打開
     const kbOpen=window.visualViewport&&(window.innerHeight-window.visualViewport.height>100);
     if(kbOpen){
-      // 鍵盤開著時強制往上展開，避免被鍵盤遮住
       this.dd.style.top='auto';
       this.dd.style.bottom='calc(100% + 4px)';
+      this.dd.style.maxHeight='220px';
       return;
     }
     const rect=this.inp.getBoundingClientRect();
     const viewH=window.innerHeight;
-    const spaceBelow=viewH-rect.bottom-8;
+    const navH=58; // --nav
+    const spaceBelow=viewH-rect.bottom-navH-8;
     if(spaceBelow<150){
       this.dd.style.top='auto';
       this.dd.style.bottom='calc(100% + 4px)';
+      this.dd.style.maxHeight='220px';
     }else{
       this.dd.style.top='calc(100% + 4px)';
       this.dd.style.bottom='auto';
+      this.dd.style.maxHeight=Math.min(220,spaceBelow)+'px';
     }
   }
   render(){
