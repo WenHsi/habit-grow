@@ -1071,7 +1071,7 @@ const Pages={
     render(){
       const sk=this.sort();
       const chips=document.getElementById('stats-sort-chips');
-      chips.innerHTML=[{k:'count',l:'次數'},{k:'name',l:'名稱'},{k:'recent',l:'最新更新'},{k:'group',l:'群組'}]
+      chips.innerHTML=[{k:'count',l:'次數'},{k:'group',l:'群組'},{k:'recent',l:'更新'}]
         .map(s=>`<button class="sort-chip${sk===s.k?' on':''}" data-s="${s.k}">${s.l}</button>`).join('');
       chips.querySelectorAll('.sort-chip').forEach(btn=>btn.addEventListener('click',()=>{S.set(K.statsort,btn.dataset.s);this.render()}));
       const habits=DB.habits();const comps=DB.comps();const el=document.getElementById('stats-list');
