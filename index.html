@@ -170,7 +170,7 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .ac-input { width: 100%; padding: 9px 12px; border: 1.5px dashed var(--border); border-radius: 8px; background: transparent; font-size: 14px; color: var(--sub); transition: all .15s; }
 .ac-input::placeholder { color: var(--done); }
 .ac-input:focus { border-color: var(--accent); border-style: solid; color: var(--text); }
-.ac-dropdown, .slot-replace-dd { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 4px 16px rgba(0,0,0,.1); z-index: 60; overflow: hidden; max-height: 220px; overflow-y: auto; }
+.ac-dropdown, .slot-replace-dd { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 4px 16px rgba(0,0,0,.1); z-index: 150; overflow: hidden; max-height: 220px; overflow-y: auto; }
 .slot-replace-dd { top: 100%; margin-top: 2px; }
 .ac-item { padding: 9px 14px; font-size: 14px; cursor: pointer; transition: background .1s; }
 .ac-item.hl { background: var(--accent-bg); }
@@ -799,25 +799,17 @@ class AC{
   _reposition(){
     if(this.dd.style.display==='none'||!this.dd.style.display)return;
     // 鍵盤偵測：visualViewport.height 縮小超過 100px 代表鍵盤已打開
+    // 鍵盤是系統 UI，z-index 無效，需強制往上展開；nav 已靠 z-index:150 解決
     const kbOpen=window.visualViewport&&(window.innerHeight-window.visualViewport.height>100);
-    if(kbOpen){
-      this.dd.style.top='auto';
-      this.dd.style.bottom='calc(100% + 4px)';
-      this.dd.style.maxHeight='220px';
-      return;
-    }
     const rect=this.inp.getBoundingClientRect();
     const viewH=window.innerHeight;
-    const navH=58; // --nav
-    const spaceBelow=viewH-rect.bottom-navH-8;
-    if(spaceBelow<150){
+    const spaceBelow=viewH-rect.bottom-8;
+    if(kbOpen||spaceBelow<150){
       this.dd.style.top='auto';
       this.dd.style.bottom='calc(100% + 4px)';
-      this.dd.style.maxHeight='220px';
     }else{
       this.dd.style.top='calc(100% + 4px)';
       this.dd.style.bottom='auto';
-      this.dd.style.maxHeight=Math.min(220,spaceBelow)+'px';
     }
   }
   render(){
