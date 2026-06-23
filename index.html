@@ -398,6 +398,14 @@ if('serviceWorker' in navigator){
   <!-- 設定 -->
   <div class="page" id="page-settings">
     <div class="settings-section">
+      <div class="settings-title">補打習慣的完成時間</div>
+      <div class="settings-desc">補打過去某天的習慣時，預設記錄哪個時間點。</div>
+      <div style="display:flex;gap:8px;">
+        <button class="comptime-opt" data-val="eod" style="flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--sub);transition:all .15s;">當天最後<br><span style="font-weight:400;font-size:11px;">23:59:59</span></button>
+        <button class="comptime-opt" data-val="now" style="flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--sub);transition:all .15s;">當下時間<br><span style="font-weight:400;font-size:11px;">補打當下</span></button>
+      </div>
+    </div>
+    <div class="settings-section">
       <div class="settings-title">匯出資料</div>
       <div class="settings-desc">匯出所有習慣、群組、排程與統計紀錄為 JSON 檔案。不包含密碼。</div>
       <button class="settings-btn" id="export-btn">⬇ 匯出 JSON</button>
@@ -465,7 +473,7 @@ const S = {
   get(k,d=null){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch{return d}},
   set(k,v){localStorage.setItem(k,JSON.stringify(v))},
 };
-const K = {pw:'h_pw',sess:'h_sess',habits:'h_habits',groups:'h_groups',comps:'h_comps',scheds:'h_scheds',statsort:'h_ss',theme:'h_theme',hist:'h_hist',hidx:'h_hidx',autofocus:'h_autofocus'};
+const K = {pw:'h_pw',sess:'h_sess',habits:'h_habits',groups:'h_groups',comps:'h_comps',scheds:'h_scheds',statsort:'h_ss',theme:'h_theme',hist:'h_hist',hidx:'h_hidx',autofocus:'h_autofocus',comptime:'h_comptime'};
 
 // ══ HISTORY ══
 const Hist={
@@ -703,7 +711,13 @@ const DB={
   },
   addCompOnDay(habitId,dk){
     const c=this.comps();
-    const at=dk===dateKey()?localISO():dk+'T12:00:00';
+    let at;
+    if(dk===dateKey()){
+      at=localISO();
+    } else {
+      const mode=S.get(K.comptime,'eod'); // 'eod' | 'now'
+      at=mode==='now'?localISO():dk+'T23:59:59';
+    }
     c.push({id:uid(),habitId,at});this.saveComps(c);
   },
   hmap(){return Object.fromEntries(this.habits().map(h=>[h.id,h]))},
@@ -1443,6 +1457,25 @@ function showApp(){
   nb.addEventListener('click',addNewHabit);ni.addEventListener('keydown',e=>{if(e.key==='Enter')addNewHabit()});
 
   // Settings export / import
+  // ── 補打時間設定 ──
+  function updateComptimeBtns(){
+    const cur=S.get(K.comptime,'eod');
+    document.querySelectorAll('.comptime-opt').forEach(btn=>{
+      const active=btn.dataset.val===cur;
+      btn.style.background=active?'var(--accent)':'var(--bg)';
+      btn.style.color=active?'#fff':'var(--sub)';
+      btn.style.borderColor=active?'var(--accent)':'var(--border)';
+    });
+  }
+  document.querySelectorAll('.comptime-opt').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      S.set(K.comptime,btn.dataset.val);
+      updateComptimeBtns();
+      showToast(btn.dataset.val==='eod'?'補打時間：當天最後（23:59:59）':'補打時間：當下時間');
+    });
+  });
+  updateComptimeBtns();
+
   document.getElementById('export-btn').addEventListener('click',()=>{
     const data={version:1,exportedAt:localISO(),habits:DB.habits(),groups:DB.groups(),comps:DB.comps(),scheds:DB.scheds()};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
