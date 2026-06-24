@@ -157,11 +157,8 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .slot-name-wrap { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
 .slot-name-wrap .slot-name { flex: unset; }
 .slot-parent-tag { font-size: 11px; color: var(--sub); line-height: 1; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-.slot-item.is-parent .slot-name { font-weight: 600; }
-.slot-sub-count { font-size: 11px; color: var(--sub); flex-shrink: 0; margin-right: 2px; pointer-events: none; }
 .slot-list .group-section { /* no extra margin */ }
 .slot-list .group-items { display: flex; flex-direction: column; gap: 0; }
-.slot-list .sub-list { margin: 0; gap: 0; }
 .slot-item.nest-candidate { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-bg); }
 
 /* ── Slot Name / Actions ── */
@@ -186,6 +183,7 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .ac-item { padding: 9px 14px; font-size: 14px; cursor: pointer; transition: background .1s; }
 .ac-item.hl { background: var(--accent-bg); }
 .ac-item.new { color: var(--accent); }
+.ac-item-sub { display: block; font-size: 11px; color: var(--sub); margin-top: 1px; }
 
 /* ── Focus Display ── */
 .focus-box { margin-top: 14px; padding: 12px 14px; background: var(--surface); border-radius: var(--r); border: 1px solid var(--border); border-left: 4px solid var(--focus-line); box-shadow: var(--sh); }
@@ -271,10 +269,6 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .focus-toggle.on { background: var(--focus-chip-bg); border-color: var(--focus-line); color: var(--focus-chip-text); }
 .del-btn { color: var(--sub); padding: 4px; opacity: .4; transition: opacity .15s; flex-shrink: 0; }
 .del-btn:hover { opacity: 1; color: var(--danger); }
-.sub-list { margin: 6px 0 2px 28px; display: flex; flex-direction: column; gap: 4px; }
-.sub-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; display: flex; align-items: center; gap: 8px; }
-.sub-item-name { flex: 1; font-size: 14px; cursor: text; border-radius: 4px; padding: 1px 4px; color: var(--text); }
-.sub-item-name:hover { background: rgba(0,0,0,.04); }
 .mgmt-item.nest-candidate { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-bg); }
 
 .new-habit-bar { display: flex; gap: 8px; margin-top: 14px; }
@@ -286,7 +280,6 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .add-group-btn { width: 100%; padding: 10px; border: 1.5px dashed var(--border); border-radius: 9px; color: var(--sub); font-size: 13px; text-align: center; cursor: pointer; margin-top: 6px; background: transparent; transition: all .15s; }
 .add-group-btn:hover { border-color: var(--accent); color: var(--accent); }
 .clean-habits-btn { padding: 6px 0; border: none; color: var(--danger); font-size: 12px; cursor: pointer; margin-top: 8px; background: transparent; display: block; width: fit-content; margin-left: auto; opacity: .7; transition: opacity .15s; }
-.mgmt-parent-icon { color: var(--sub); display: flex; align-items: center; flex-shrink: 0; opacity: 0.7; }
 .clean-habits-btn:hover { opacity: 1; }
 
 /* ── Modal ── */
@@ -599,7 +592,6 @@ async function sha256(str){const b=await crypto.subtle.digest('SHA-256',new Text
 
 // 習慣是否有排程或完成記錄（無引用才可直接刪除）
 function isHabitReferenced(id){
-  if(DB.habits().some(h=>h.parentId===id))return true;
   if(DB.comps().some(c=>c.habitId===id))return true;
   return Object.values(DB.scheds()).some(ids=>ids.includes(id));
 }
@@ -723,9 +715,6 @@ const DB={
   },
   // When habit deleted, remove from all schedules
   cleanupHabit(habitId){
-    // promote any sub-habits to top level
-    const all=this.habits();const children=all.filter(h=>h.parentId===habitId);
-    if(children.length){children.forEach(h=>delete h.parentId);this.saveHabits(all);}
     const sc=this.scheds();
     Object.keys(sc).forEach(dk=>{sc[dk]=sc[dk].filter(id=>id!==habitId)});
     this.saveScheds(sc);
@@ -761,8 +750,6 @@ const DB={
     }
     c.push({id:uid(),habitId,at});this.saveComps(c);
   },
-  subHabits(parentId){return this.habits().filter(h=>h.parentId===parentId)},
-  topLevelHabits(){return this.habits().filter(h=>!h.parentId)},
   hmap(){return Object.fromEntries(this.habits().map(h=>[h.id,h]))},
   focusIds(){return new Set(this.habits().filter(h=>h.isFocus).map(h=>h.id))},
 };
@@ -797,6 +784,11 @@ function getWeeks(n=8){
   const ws=[];const now=new Date();
   for(let w=n-1;w>=0;w--){const d=new Date(now);d.setDate(d.getDate()-w*7);d.setDate(d.getDate()-(d.getDay()===0?6:d.getDay()-1));ws.push(dateKey(d));}
   return ws;
+}
+function trimLeadingEmpty(wk,lines){
+  let first=wk.findIndex((_,i)=>lines.some(l=>(l.data[i]||0)>0));
+  if(first<=0)return{wk,lines};
+  return{wk:wk.slice(first),lines:lines.map(l=>({...l,data:l.data.slice(first)}))};
 }
 function makePieSVG(slices){
   const filled=slices.filter(s=>s.count>0);
@@ -922,7 +914,7 @@ function makeCrossGroupSortable(wrapper,callbacks,opts={}){
       ghost=subItem.cloneNode(true);ghost.className='drag-ghost';
       ghost.style.cssText=`width:${r.width}px;top:${r.top}px;left:${r.left}px`;
     } else if(mgmtItem){
-      drag=mgmtItem;dragHasChildren=DB.subHabits(drag.dataset.id).length>0;
+      drag=mgmtItem;dragHasChildren=false;
       const r=drag.getBoundingClientRect();offsetX=cx(e)-r.left;offsetY=cy(e)-r.top;
       ghost=drag.cloneNode(true);ghost.className='drag-ghost';
       ghost.style.cssText=`width:${r.width}px;top:${r.top}px;left:${r.left}px`;
@@ -1031,7 +1023,7 @@ class AC{
   render(){
     if(!this.opts.length){this.close();return}
     this.dd.innerHTML=this.opts.map((o,i)=>
-      `<div class="ac-item${o.type==='create'?' new':''}" data-i="${i}">${o.type==='create'?`新增「${o.label}」`:o.label}</div>`
+      `<div class="ac-item${o.type==='create'?' new':''}" data-i="${i}">${o.type==='create'?`新增「${o.label}」`:o.label}${o.sub&&!o.type?`<span class="ac-item-sub">${SVG.folder}${o.sub}</span>`:''}</div>`
     ).join('');
     this.dd.style.display='block';
     this._reposition();
@@ -1054,18 +1046,17 @@ class AC{
 }
 
 // ══ SHARED HELPERS ══
-function createHabit(name,parentId=null){const h={id:uid(),name,isFocus:false,groupId:null,createdAt:localISO()};if(parentId)h.parentId=parentId;return h;}
+function createHabit(name){return {id:uid(),name,isFocus:false,groupId:null,createdAt:localISO()};}
 function getOrCreateHabitId(name){
   const all=DB.habits();const ex=all.find(h=>h.name===name);
   if(ex)return ex.id;
   const h=createHabit(name);all.push(h);DB.saveHabits(all);return h.id;
 }
-function optFromHabit(h){return{id:h.id,label:h.name}}
+function optFromHabit(h,gmap={}){return{id:h.id,label:h.name,sub:h.groupId&&gmap[h.groupId]?gmap[h.groupId].name:null}}
 function getHabitOptions(q,excludeIds=[]){
   const excl=new Set(excludeIds);
-  // exclude habits that are parent headers (have sub-habits under them)
-  const parentIds=new Set(DB.habits().filter(h=>h.parentId).map(h=>h.parentId));
-  return DB.habits().filter(h=>!excl.has(h.id)&&!parentIds.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(optFromHabit);
+  const gmap=Object.fromEntries(DB.groups().map(g=>[g.id,g]));
+  return DB.habits().filter(h=>!excl.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(h=>optFromHabit(h,gmap));
 }
 function resolveOpt(opt){
   if(opt.type==='create')return getOrCreateHabitId(opt.label);
@@ -1084,7 +1075,8 @@ function startSlotReplace(div,currentId,dk,onChange){
   const ac=new AC(inp,dd,{
     getOptions(q){
       const cur=new Set(DB.getDay(dk)||[]);cur.delete(currentId);
-      return DB.habits().filter(h=>!cur.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(optFromHabit);
+      const gmap=Object.fromEntries(DB.groups().map(g=>[g.id,g]));
+      return DB.habits().filter(h=>!cur.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(h=>optFromHabit(h,gmap));
     },
     onSelect(opt){
       const newId=resolveOpt(opt);
@@ -1106,22 +1098,19 @@ function startSlotReplace(div,currentId,dk,onChange){
 }
 
 // ══ MAKE SLOT ITEM ══
-function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false,parentName=null,isParent=false,subCount=0,isSub=false,isParentContainer=false}={},onChange){
+function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false,groupName=null}={},onChange){
   const div=document.createElement('div');
-  div.className=`slot-item${isDone?' done':''}${isFocus?' is-focus':''}${isParent?' is-parent':''}`;
+  div.className=`slot-item${isDone?' done':''}${isFocus?' is-focus':''}`;
   div.dataset.id=h.id;
-  const nameHtml=parentName
-    ?`<div class="slot-name-wrap"><span class="slot-name">${h.name}</span><span class="slot-parent-tag">${SVG.folder}${parentName}</span></div>`
+  const nameHtml=groupName
+    ?`<div class="slot-name-wrap"><span class="slot-name">${h.name}</span><span class="slot-parent-tag">${SVG.folder}${groupName}</span></div>`
     :`<span class="slot-name">${h.name}</span>`;
   const ct=isDone?DB.getCompTimeOnDay(h.id,dk):null;
   if(isDone){
-    // Done: drag handle + checkbox (click to restore) + name + time — NO × or 恢復 button
     div.innerHTML=`
       <span class="drag-handle">${SVG.grip}</span>
       ${showCheck?`<button class="check-btn on" type="button" title="點擊恢復">${SVG.check}</button>`:''}
       ${nameHtml}
-      ${isParent?`<span class="slot-parent-icon">${SVG.folder}</span>`:''}
-      ${isParent&&subCount>0?`<span class="slot-sub-count">·${subCount}</span>`:''}
       ${ct?`<span class="slot-time">${fmtTime(ct)}</span>`:''}
     `;
     if(showCheck){
@@ -1151,13 +1140,10 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false,parentNam
       attachTimeClick();
     }
   } else {
-    // Pending: drag handle + checkbox + name (click to replace) + sub-count + ×
     div.innerHTML=`
       <span class="drag-handle">${SVG.grip}</span>
       ${showCheck?`<button class="check-btn" type="button">${SVG.check}</button>`:''}
       ${nameHtml}
-      ${isParent?`<span class="slot-parent-icon">${SVG.folder}</span>`:''}
-      ${isParent&&subCount>0?`<span class="slot-sub-count">·${subCount}</span>`:''}
       <button class="rm-slot-btn" type="button">×</button>
     `;
     if(showCheck){
@@ -1179,14 +1165,14 @@ function renderDaySlots(container,dk,{showCheck=false}={},onUpdate){
   container.innerHTML='';
   const order=DB.getOrCreateDay(dk);
   const hmap=DB.hmap();const focusSet=DB.focusIds();
+  const gmap=Object.fromEntries(DB.groups().map(g=>[g.id,g]));
   function refresh(){onUpdate?onUpdate():renderDaySlots(container,dk,{showCheck},null)}
   const pending=order.filter(id=>hmap[id]&&(!showCheck||!DB.isDoneOnDay(id,dk)));
   const list=document.createElement('div');list.className='slot-list';
   pending.forEach(id=>{
     const h=hmap[id];if(!h)return;
-    const parentName=h.parentId&&hmap[h.parentId]?hmap[h.parentId].name:null;
-    const subs=DB.subHabits(id);const isParent=subs.length>0;
-    list.appendChild(makeSlotItem(h,dk,{showCheck,isDone:false,isFocus:focusSet.has(id),parentName,isParent,subCount:subs.length},refresh));
+    const groupName=h.groupId&&gmap[h.groupId]?gmap[h.groupId].name:null;
+    list.appendChild(makeSlotItem(h,dk,{showCheck,isDone:false,isFocus:focusSet.has(id),groupName},refresh));
   });
   container.appendChild(list);
   makeSortable(list,'.slot-item',newOrder=>{
@@ -1231,6 +1217,7 @@ const Pages={
     },
     renderDoneSection(){
       const dk=viewDate||dateKey();const hmap=DB.hmap();
+      const gmap=Object.fromEntries(DB.groups().map(g=>[g.id,g]));
       const order=DB.getOrCreateDay(dk);
       const focusSet=DB.focusIds();
       const done=order.filter(id=>hmap[id]&&DB.isDoneOnDay(id,dk));
@@ -1241,9 +1228,8 @@ const Pages={
         done.forEach(id=>{
           const h=hmap[id];if(!h)return;
           const cb=()=>{self.renderToday();self.renderDoneSection();};
-          const parentName=h.parentId&&hmap[h.parentId]?hmap[h.parentId].name:null;
-          const subs=DB.subHabits(id);const isParent=subs.length>0;
-          list.appendChild(makeSlotItem(h,dk,{showCheck:true,isDone:true,isFocus:focusSet.has(id),parentName,isParent,subCount:subs.length},cb));
+          const groupName=h.groupId&&gmap[h.groupId]?gmap[h.groupId].name:null;
+          list.appendChild(makeSlotItem(h,dk,{showCheck:true,isDone:true,isFocus:focusSet.has(id),groupName},cb));
         });
         makeSortable(list,'.slot-item',newDoneOrder=>{
           const pending=order.filter(id=>hmap[id]&&!DB.isDoneOnDay(id,dk));
@@ -1325,10 +1311,12 @@ const Pages={
       const map={};habits.forEach(h=>{map[h.id]=[]});
       comps.forEach(c=>{if(map[c.habitId])map[c.habitId].push(c)});
 
-      const parentIds=new Set(habits.filter(h=>h.parentId).map(h=>h.parentId));
-      const topLevel=habits.filter(h=>!h.parentId);
-      function parentTotal(h){return(map[h.id]||[]).length+DB.subHabits(h.id).reduce((s,sub)=>s+(map[sub.id]||[]).length,0);}
-      function getCount(h){return parentIds.has(h.id)?parentTotal(h):(map[h.id]||[]).length;}
+      const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
+      const gmap=Object.fromEntries(groups.map(g=>[g.id,g]));
+      const groupHabitsMap={};
+      habits.forEach(h=>{const gid=h.groupId&&gmap[h.groupId]?h.groupId:'';if(!groupHabitsMap[gid])groupHabitsMap[gid]=[];groupHabitsMap[gid].push(h);});
+      function groupTotal(gid){return(groupHabitsMap[gid]||[]).reduce((s,h)=>s+(map[h.id]||[]).length,0);}
+      function groupRecent(gid){return(groupHabitsMap[gid]||[]).flatMap(h=>(map[h.id]||[]).map(c=>c.at)).sort().pop()||'';}
 
       function makeStatItem(h){
         const hc=(map[h.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
@@ -1337,27 +1325,23 @@ const Pages={
         return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${hc.length}次</span>${SVG.chev}</div><div class="stat-history${sc}">${hc.length?hc.map(histHtml).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
       }
 
-      function makeParentStatItemEl(h){
-        const total=parentTotal(h);const subs=DB.subHabits(h.id);const direct=map[h.id]||[];
-        const div=document.createElement('div');div.className=`stat-item stat-parent${h.isFocus?' is-focus':''}`;
-        const subsHtml=subs.map((sub,i)=>{
-          const sc=(map[sub.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
+      function makeGroupStatItemEl(g,habitsInGroup){
+        const total=habitsInGroup.reduce((s,h)=>s+(map[h.id]||[]).length,0);
+        const div=document.createElement('div');div.className='stat-item stat-parent';
+        const subsHtml=habitsInGroup.map((h,i)=>{
+          const sc=(map[h.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
           const scrollCls=sc.length>3?' hist-scroll':'';
           const eHtml=c=>`<div class="hist-entry" data-id="${c.id}"><span class="hist-time">${fmtDateTime(c.at)}</span><button class="hist-del-btn" type="button" title="刪除">×</button></div>`;
-          return`<div class="stat-sub-section"><div class="stat-sub-hdr"><div class="stat-sub-dot" style="background:${CHART_COLORS[i%CHART_COLORS.length]}"></div><span class="stat-sub-name">${sub.name}</span><span class="stat-count">${sc.length}次</span>${SVG.chev}</div><div class="stat-sub-history${scrollCls}">${sc.length?sc.map(eHtml).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
+          return`<div class="stat-sub-section"><div class="stat-sub-hdr"><div class="stat-sub-dot" style="background:${CHART_COLORS[i%CHART_COLORS.length]}"></div><span class="stat-sub-name">${h.name}</span><span class="stat-count">${sc.length}次</span>${SVG.chev}</div><div class="stat-sub-history${scrollCls}">${sc.length?sc.map(eHtml).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
         }).join('');
-        const dSorted=direct.slice().sort((a,b)=>b.at.localeCompare(a.at));
-        const dScrollCls=dSorted.length>3?' hist-scroll':'';
-        const dEHtml=c=>`<div class="hist-entry" data-id="${c.id}"><span class="hist-time">${fmtDateTime(c.at)}</span><button class="hist-del-btn" type="button" title="刪除">×</button></div>`;
-        const directHtml=direct.length?`<div class="stat-sub-section"><div class="stat-sub-hdr"><div class="stat-sub-dot" style="background:${CHART_COLORS[subs.length%CHART_COLORS.length]}"></div><span class="stat-sub-name">（未分類）</span><span class="stat-count">${direct.length}次</span>${SVG.chev}</div><div class="stat-sub-history${dScrollCls}">${dSorted.map(dEHtml).join('')}</div></div>`:'';
         div.innerHTML=`
           <div class="stat-row">
-            <span class="stat-name stat-parent-name">${SVG.folder}${h.name}</span>
+            <span class="stat-name stat-parent-name">${SVG.folder}${g.name}</span>
             <span class="stat-count">${total}次</span>
             <button class="stat-chart-toggle">圖表</button>
             ${SVG.chev}
           </div>
-          <div class="stat-history"><div class="stat-chart-area"></div>${subsHtml}${directHtml}</div>`;
+          <div class="stat-history"><div class="stat-chart-area"></div>${subsHtml}</div>`;
         div.querySelector('.stat-row').addEventListener('click',e=>{if(!e.target.closest('.stat-chart-toggle'))div.classList.toggle('open');});
         div.querySelectorAll('.stat-sub-hdr').forEach(hdr=>{hdr.addEventListener('click',e=>{e.stopPropagation();hdr.closest('.stat-sub-section').classList.toggle('open');});});
         const chartArea=div.querySelector('.stat-chart-area');
@@ -1366,30 +1350,17 @@ const Pages={
           const modes=['pie','line',''];const next=modes[(modes.indexOf(chartArea.dataset.mode||'')+1)%modes.length];
           chartArea.dataset.mode=next;chartArea.innerHTML='';
           if(!next)return;
-          const slices=[
-            ...subs.map((sub,i)=>({label:sub.name,count:(map[sub.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length]})),
-            ...(direct.length?[{label:'未分類',count:direct.length,color:CHART_COLORS[subs.length%CHART_COLORS.length]}]:[])
-          ];
+          const slices=habitsInGroup.map((h,i)=>({label:h.name,count:(map[h.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length]}));
           if(next==='pie'){chartArea.innerHTML=makePieSVG(slices);}
           else{
-            const wk=getWeeks(8);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});
-            function wd(cl){return wk.map((ws,i)=>{const we=wk[i+1]||'9999-99-99';return cl.filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;});}
-            const lines=[
-              ...subs.map((sub,i)=>({label:sub.name,data:wd(map[sub.id]||[]),color:CHART_COLORS[i%CHART_COLORS.length]})),
-              ...(direct.length?[{label:'未分類',data:wd(direct),color:CHART_COLORS[subs.length%CHART_COLORS.length]}]:[])
-            ];
+            const wk0=getWeeks(8);
+            function wd(cl){return wk0.map((ws,i)=>{const we=wk0[i+1]||'9999-99-99';return cl.filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;});}
+            const lines0=habitsInGroup.map((h,i)=>({label:h.name,data:wd(map[h.id]||[]),color:CHART_COLORS[i%CHART_COLORS.length]}));
+            const {wk,lines}=trimLeadingEmpty(wk0,lines0);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});
             chartArea.innerHTML=makeLineSVG(lines,lbs);
           }
         });
         return div;
-      }
-
-      function appendList(list){
-        const sorted=[...list].sort((a,b)=>(parentIds.has(b.id)?1:0)-(parentIds.has(a.id)?1:0));
-        sorted.forEach(h=>{
-          if(parentIds.has(h.id)){el.appendChild(makeParentStatItemEl(h));}
-          else{const t=document.createElement('div');t.innerHTML=makeStatItem(h);if(t.firstChild)el.appendChild(t.firstChild);}
-        });
       }
 
       // ── global chart ──
@@ -1397,41 +1368,31 @@ const Pages={
       if(_statsChartMode&&habits.length){
         const allSorted=[...habits].filter(h=>(map[h.id]||[]).length>0).sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
         if(_statsChartMode==='pie'){
-          const slices=allSorted.slice(0,14).map((h,i)=>({label:h.name,count:(map[h.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length],isParent:parentIds.has(h.id)}));
+          const slices=allSorted.slice(0,14).map((h,i)=>({label:h.name,count:(map[h.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length]}));
           gcEl.innerHTML=makePieSVG(slices);
         }else{
-          const wk=getWeeks(8);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});
-          const lines=allSorted.slice(0,8).map((h,i)=>({label:h.name,data:wk.map((ws,i2)=>{const we=wk[i2+1]||'9999-99-99';return(map[h.id]||[]).filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;}),color:CHART_COLORS[i%CHART_COLORS.length],isParent:parentIds.has(h.id)}));
-          gcEl.innerHTML=makeLineSVG(lines,lbs);
+          {const wk0=getWeeks(8);let lines0=allSorted.slice(0,8).map((h,i)=>({label:h.name,data:wk0.map((ws,i2)=>{const we=wk0[i2+1]||'9999-99-99';return(map[h.id]||[]).filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;}),color:CHART_COLORS[i%CHART_COLORS.length]}));const {wk,lines}=trimLeadingEmpty(wk0,lines0);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});gcEl.innerHTML=makeLineSVG(lines,lbs);}
         }
       }
 
       el.innerHTML='';
-      if(sk==='group'){
-        const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
-        const groupMap={};topLevel.forEach(h=>{const gid=h.groupId||'';if(!groupMap[gid])groupMap[gid]=[];groupMap[gid].push(h)});
-        groups.forEach(g=>{
-          const hs=(groupMap[g.id]||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));if(!hs.length)return;
-          const ghdr=document.createElement('div');ghdr.className='group-header';ghdr.style.cssText='margin-top:14px;margin-bottom:6px';
-          ghdr.innerHTML=`<div class="group-label">${g.name}</div><div class="group-line"></div>`;
-          el.appendChild(ghdr);appendList(hs);
-        });
-        const ungrouped=(groupMap['']||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));
-        if(ungrouped.length){
-          const ghdr=document.createElement('div');ghdr.className='group-header';ghdr.style.cssText='margin-top:14px;margin-bottom:6px';
-          ghdr.innerHTML=`<div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div>`;
-          el.appendChild(ghdr);appendList(ungrouped);
-        }
-      }else{
-        let sorted=[...topLevel];
-        if(sk==='count')sorted.sort((a,b)=>getCount(b)-getCount(a));
-        else if(sk==='recent')sorted.sort((a,b)=>{
-          const al=(map[a.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
-          const bl=(map[b.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
-          return bl.localeCompare(al);
-        });
-        appendList(sorted);
-      }
+      // groups with habits → group stat items (sort varies by mode)
+      let groupsToShow=groups.filter(g=>groupTotal(g.id)>0);
+      if(sk==='count')groupsToShow=[...groupsToShow].sort((a,b)=>groupTotal(b.id)-groupTotal(a.id));
+      else if(sk==='recent')groupsToShow=[...groupsToShow].sort((a,b)=>groupRecent(b.id).localeCompare(groupRecent(a.id)));
+      groupsToShow.forEach(g=>{
+        const hs=(groupHabitsMap[g.id]||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));
+        el.appendChild(makeGroupStatItemEl(g,hs));
+      });
+      // ungrouped habits → individual stat items
+      let ungrouped=[...(groupHabitsMap['']||[])];
+      if(sk==='count')ungrouped.sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
+      else if(sk==='recent')ungrouped.sort((a,b)=>{
+        const al=(map[a.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
+        const bl=(map[b.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
+        return bl.localeCompare(al);
+      });else ungrouped.sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));
+      ungrouped.filter(h=>(map[h.id]||[]).length>0).forEach(h=>{const t=document.createElement('div');t.innerHTML=makeStatItem(h);if(t.firstChild)el.appendChild(t.firstChild);});
       el.querySelectorAll('.stat-item:not(.stat-parent)').forEach(item=>{
         item.querySelector('.stat-row').addEventListener('click',()=>item.classList.toggle('open'));
       });
@@ -1472,9 +1433,9 @@ const Pages={
       const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
       const habits=DB.habits();const self=this;
       const wrapper=document.createElement('div');wrapper.id='groups-wrap';
-      groups.forEach(g=>{wrapper.appendChild(self.makeGroupSection(g,habits.filter(h=>h.groupId===g.id&&!h.parentId),self))});
-      // ungrouped (top-level only)
-      const ungrouped=habits.filter(h=>(!h.groupId||!groups.find(g=>g.id===h.groupId))&&!h.parentId);
+      groups.forEach(g=>{wrapper.appendChild(self.makeGroupSection(g,habits.filter(h=>h.groupId===g.id),self))});
+      // ungrouped
+      const ungrouped=habits.filter(h=>!h.groupId||!groups.find(g=>g.id===h.groupId));
       if(ungrouped.length){
         const sec=document.createElement('div');sec.className='group-section';sec.dataset.gid='';
         sec.innerHTML=`<div class="group-header"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
@@ -1490,21 +1451,6 @@ const Pages={
           if(h)h.groupId=newGroupId||null;
           newOrder.forEach((id,i)=>{const x=all.find(h=>h.id===id);if(x)x.groupOrder=i});
           Hist.label('移動習慣');DB.saveHabits(all);self.render();
-        },
-        onNest({habitId,parentId}){
-          const all=DB.habits();const h=all.find(x=>x.id===habitId);const p=all.find(x=>x.id===parentId);
-          if(h&&p){h.parentId=parentId;h.groupId=p.groupId||null;Hist.label(`將「${h.name}」加入「${p.name}」子習慣`);DB.saveHabits(all);showToast(`「${h.name}」已成為「${p.name}」的子習慣`);}
-          self.render();
-        },
-        onPromote({subId,newGroupId,newOrder}){
-          const all=DB.habits();const h=all.find(x=>x.id===subId);
-          if(h){delete h.parentId;h.groupId=newGroupId||null;newOrder.forEach((id,i)=>{const x=all.find(h=>h.id===id);if(x)x.groupOrder=i});Hist.label(`升格「${h.name}」為獨立習慣`);DB.saveHabits(all);showToast(`「${h.name}」已升格`);}
-          self.render();
-        },
-        onNestSub({subId,newParentId}){
-          const all=DB.habits();const h=all.find(x=>x.id===subId);const p=all.find(x=>x.id===newParentId);
-          if(h&&p&&p.id!==h.parentId){h.parentId=newParentId;h.groupId=p.groupId||null;Hist.label(`移動「${h.name}」到「${p.name}」`);DB.saveHabits(all);showToast(`「${h.name}」已移到「${p.name}」`);}
-          self.render();
         }
       });
       makeSortable(wrapper,'.group-section[data-gid]:not([data-gid=""])',newGOrder=>{
@@ -1560,11 +1506,9 @@ const Pages={
     makeHabitItem(h,self){
       const div=document.createElement('div');
       div.className=`mgmt-item${h.isFocus?' is-focus':''}`;div.dataset.id=h.id;
-      const isParentHabit=DB.subHabits(h.id).length>0;
       div.innerHTML=`
         <div class="habit-row">
           <span class="drag-handle">${SVG.grip}</span>
-          ${isParentHabit?`<span class="mgmt-parent-icon">${SVG.folder}</span>`:''}
           <span class="mgmt-name">${h.name}</span>
           <button class="focus-toggle${h.isFocus?' on':''}">${h.isFocus?'重點培養 ✓':'重點培養'}</button>
           <button class="del-btn">${SVG.x}</button>
@@ -1587,62 +1531,15 @@ const Pages={
       });
       // delete
       div.querySelector('.del-btn').addEventListener('click',()=>{
-        const subs=DB.subHabits(h.id);
         const hasRef=isHabitReferenced(h.id);
-        if(!hasRef&&!subs.length){
+        if(!hasRef){
           Hist.label(`刪除習慣「${h.name}」`);
           DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
           DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
         }else{
-          const body=subs.length?`子習慣將升格為獨立習慣，排程與統計將一併移除`:`排程與統計將一併移除`;
-          showConfirm(`刪除「${h.name}」？`,body,()=>{
+          showConfirm(`刪除「${h.name}」？`,`排程與統計將一併移除`,()=>{
             Hist.label(`刪除習慣「${h.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
             DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
-          });
-        }
-      });
-      // sub-habits
-      self.renderSubList(div,h,self);
-      return div;
-    },
-    renderSubList(parentDiv,h,self){
-      parentDiv.querySelectorAll('.sub-list').forEach(el=>el.remove());
-      const subs=DB.subHabits(h.id);
-      if(!subs.length)return;
-      const subList=document.createElement('div');subList.className='sub-list';
-      subs.forEach(sub=>subList.appendChild(self.makeSubHabitItem(sub,h,self)));
-      parentDiv.appendChild(subList);
-    },
-    makeSubHabitItem(sub,parent,self){
-      const div=document.createElement('div');div.className=`sub-item${sub.isFocus?' is-focus':''}`;div.dataset.id=sub.id;
-      div.innerHTML=`
-        <span class="drag-handle">${SVG.grip}</span>
-        <span class="sub-item-name">${sub.name}</span>
-        <button class="focus-toggle${sub.isFocus?' on':''}">${sub.isFocus?'重點培養 ✓':'重點培養'}</button>
-        <button class="del-btn">${SVG.x}</button>
-      `;
-      div.querySelector('.focus-toggle').addEventListener('click',()=>{
-        const all=DB.habits();const idx=all.findIndex(x=>x.id===sub.id);
-        if(idx!==-1){const nowFocus=!all[idx].isFocus;Hist.label(`${nowFocus?'設為':'取消'}重點培養「${sub.name}」`);all[idx].isFocus=nowFocus;DB.saveHabits(all);DB.syncFocusChange(sub.id,nowFocus);showToast(nowFocus?`「${sub.name}」設為重點培養`:`「${sub.name}」取消重點培養`);}
-        self.render();
-      });
-      div.querySelector('.sub-item-name').addEventListener('click',()=>{
-        const nameEl=div.querySelector('.sub-item-name');
-        const inp=document.createElement('input');inp.className='mgmt-name-input';inp.style.fontSize='14px';inp.value=sub.name;
-        nameEl.replaceWith(inp);inp.focus();inp.select();
-        function save(){const v=inp.value.trim();if(v&&v!==sub.name){Hist.label(`重新命名「${sub.name}」→「${v}」`);const all=DB.habits();const idx=all.findIndex(x=>x.id===sub.id);if(idx!==-1){all[idx].name=v;DB.saveHabits(all);showToast(`已更名為「${v}」`)}}self.render()}
-        inp.addEventListener('blur',save);
-        inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=sub.name;inp.blur()}});
-      });
-      div.querySelector('.del-btn').addEventListener('click',()=>{
-        if(!isHabitReferenced(sub.id)){
-          Hist.label(`刪除子習慣「${sub.name}」`);
-          DB.saveHabits(DB.habits().filter(x=>x.id!==sub.id));
-          DB.cleanupHabit(sub.id);showToast(`已刪除「${sub.name}」`);self.render();
-        }else{
-          showConfirm(`刪除「${sub.name}」？`,`排程與統計將一併移除`,()=>{
-            Hist.label(`刪除子習慣「${sub.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==sub.id));
-            DB.cleanupHabit(sub.id);showToast(`已刪除「${sub.name}」`);self.render();
           });
         }
       });
@@ -1658,8 +1555,14 @@ const Pages={
 
 // ══ CLEANUP ══
 function cleanupEmptyScheduleDays(){
-  const today=dateKey();const sc=DB.scheds();let changed=false;
-  Object.keys(sc).forEach(dk=>{if(dk>today&&(!sc[dk]||sc[dk].length===0)){delete sc[dk];changed=true;}});
+  const today=dateKey();const sc=DB.scheds();const af=DB.autofocus();let changed=false;
+  Object.keys(sc).forEach(dk=>{
+    if(dk>today){
+      const ids=sc[dk]||[];
+      // remove days that are empty OR contain only auto-injected focus habits
+      if(ids.length===0||ids.every(id=>(af[dk]||[]).includes(id))){delete sc[dk];changed=true;}
+    }
+  });
   if(changed)DB.saveScheds(sc);
 }
 
