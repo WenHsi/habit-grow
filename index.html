@@ -2075,8 +2075,7 @@ function showApp(){
     setGistStatus('備份中…');
     try{
       await _doGistPush({throw:true});
-      const gid=GistBackup.gistId();
-      setGistStatus('備份成功'+(gid?' · Gist '+gid.slice(0,7):''),'ok');
+      refreshGistStatus();
     }catch(e){setGistStatus('備份失敗：'+e.message,'err');}
   });
   document.getElementById('gist-pull-btn').addEventListener('click',()=>{
