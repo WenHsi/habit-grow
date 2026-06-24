@@ -483,16 +483,20 @@ if('serviceWorker' in navigator){
         <button class="comptime-opt" data-val="now" style="flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--sub);transition:all .15s;">當下時間<br><span style="font-weight:400;font-size:11px;">補打當下</span></button>
       </div>
     </div>
-    <div class="settings-section">
-      <div class="settings-title">匯出資料</div>
-      <div class="settings-desc">匯出所有習慣、群組、排程與統計紀錄為 JSON 檔案。不包含密碼。</div>
-      <button class="settings-btn" id="export-btn">⬇ 匯出 JSON</button>
-    </div>
-    <div class="settings-section">
-      <div class="settings-title">載入資料</div>
-      <div class="settings-desc">從 JSON 備份檔案還原資料。<br>⚠ 現有資料將被完全覆蓋，無法復原。</div>
-      <button class="settings-btn danger" id="import-btn">⬆ 載入 JSON</button>
-      <input type="file" id="import-file" accept=".json" style="display:none">
+    <div class="settings-section" style="padding-bottom:12px">
+      <div style="display:flex;gap:12px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div class="settings-title" style="margin:0">匯出資料</div>
+          <div class="settings-desc" style="margin:0">匯出習慣、排程、紀錄為 JSON。不含密碼。</div>
+          <button class="settings-btn" id="export-btn" style="margin-top:auto">⬇ 匯出 JSON</button>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div class="settings-title" style="margin:0">載入資料</div>
+          <div class="settings-desc" style="margin:0">從 JSON 還原資料。<br>⚠ 現有資料將被完全覆蓋。</div>
+          <button class="settings-btn danger" id="import-btn" style="margin-top:auto">⬆ 載入 JSON</button>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+        </div>
+      </div>
     </div>
     <div class="settings-section">
       <div class="settings-title">☁ Gist 加密備份</div>
