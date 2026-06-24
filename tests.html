@@ -801,6 +801,173 @@
     }));
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 離線 / 網路相關修復測試
+  // 注意：含 gistEncrypt（PBKDF2 100k iter）的測試需 3-6 秒，屬正常
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── 測試用 timeout 保護 ──────────────────────────────────────────────────
+  // 所有含 fetch/async 的網路測試加上 timeout，避免一個 hang 卡死全部
+  function withTimeout(fn, ms = 7000) {
+    return async () => {
+      let timeoutId;
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`測試超時（${ms}ms）— 可能是 mock fetch 未正確 abort`)), ms);
+      });
+      try { await Promise.race([fn(), timeout]); }
+      finally { clearTimeout(timeoutId); }
+    };
+  }
+
+  // ── AbortController 單元測試（不需 gistEncrypt，直接測 fetch 行為）
+  describe('AbortController — fetch abort 機制', () => {
+    it('已 abort 的 signal 傳入 fetch 立即 reject（瀏覽器原生行為）', async () => {
+      const ctrl = new W.AbortController();
+      ctrl.abort();
+      let errName = '';
+      try { await W.fetch('https://httpbin.org/delay/10', { signal: ctrl.signal }); }
+      catch(e) { errName = e.name; }
+      eq(errName, 'AbortError', '已 abort signal 應讓 fetch 立即拋出 AbortError');
+    });
+
+    it('mock fetch：signal.aborted 前置檢查確保已 abort 的 signal 能立即 reject', async () => {
+      // 正確的 mock fetch 寫法：先檢查 .aborted，再 addEventListener
+      function mockFetchWithAbort(url, opts) {
+        return new Promise((resolve, reject) => {
+          const sig = opts?.signal;
+          if (sig?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+          sig?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+          // 永遠 pending（模擬 hang）
+        });
+      }
+      const ctrl = new AbortController();
+      ctrl.abort(); // 已 abort
+      let errName = '';
+      try { await mockFetchWithAbort('http://x', { signal: ctrl.signal }); }
+      catch(e) { errName = e.name; }
+      eq(errName, 'AbortError', '前置檢查 .aborted 確保已 abort 的 signal 正確處理');
+    });
+
+    it('abort 後 pending 的 mock fetch 正確中斷', withTimeout(async () => {
+      const ctrl = new AbortController();
+      let rejected = false;
+      const p = new Promise((_, reject) => {
+        const sig = ctrl.signal;
+        if (sig.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+        sig.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      }).catch(e => { if (e.name === 'AbortError') rejected = true; });
+      ctrl.abort();
+      await p;
+      assert(rejected, 'abort 後 pending promise 應被 reject');
+    }));
+  });
+
+  // ── GistBackup.push 函式簽名 ─────────────────────────────────────────────
+  describe('GistBackup.push — signal 參數', () => {
+    it('push 宣告了 signal 參數（length >= 1）', () => {
+      assert(GistBackup.push.length >= 1, 'push 應宣告 signal 參數');
+    });
+
+    it('無 token 時不呼叫 fetch，立即拋出錯誤', async () => {
+      W.localStorage.removeItem(K.gistToken);
+      let msg = '';
+      try { await GistBackup.push(); } catch(e) { msg = e.message; }
+      assert(msg.length > 0, '應有錯誤訊息');
+    });
+  });
+
+  // ── 404 自動重建（mock gistEncrypt + fetch，跳過 PBKDF2）───────────────────
+  describe('GistBackup.push — 404 自動重建 Gist', () => {
+    it('push 收到 404 時改用 POST 重建，fetch 呼叫兩次', withTimeout(async () => {
+      const origFetch = W.fetch;
+      let callCount = 0, lastMethod = '';
+      W.fetch = (url, opts) => {
+        callCount++; lastMethod = opts?.method || 'GET';
+        if (callCount === 1)
+          return Promise.resolve(new W.Response(JSON.stringify({ message:'Not Found' }), { status:404 }));
+        return Promise.resolve(new W.Response(JSON.stringify({ id:'new_gist_abc' }), { status:201 }));
+      };
+      S.set(K.gistToken, 'fake_token');
+      S.set(K.gistId, 'old_deleted_id');
+      try { await GistBackup.push(); } catch(e) {}
+      finally { W.fetch = origFetch; W.localStorage.removeItem(K.gistToken); }
+      eq(callCount, 2, 'PATCH 404 → POST 重建，共 2 次 fetch');
+      eq(lastMethod, 'POST', '第二次應是 POST');
+    }));
+
+    it('404 retry 後 gistId 更新為新值', withTimeout(async () => {
+      const origFetch = W.fetch;
+      let count = 0;
+      W.fetch = () => {
+        count++;
+        if (count === 1) return Promise.resolve(new W.Response(JSON.stringify({ message:'Not Found' }), { status:404 }));
+        return Promise.resolve(new W.Response(JSON.stringify({ id:'brand_new_gist' }), { status:201 }));
+      };
+      S.set(K.gistToken, 'fake_token');
+      S.set(K.gistId, 'stale_id');
+      let newId = '';
+      try { await GistBackup.push(); newId = GistBackup.gistId(); } catch(e) {}
+      finally { W.fetch = origFetch; W.localStorage.removeItem(K.gistToken); W.localStorage.removeItem(K.gistId); }
+      eq(newId, 'brand_new_gist', 'gistId 應更新為新值');
+    }));
+
+    it('非 404 的錯誤不重試（例如 403 直接拋出）', withTimeout(async () => {
+      const origFetch = W.fetch;
+      let count = 0;
+      W.fetch = () => {
+        count++;
+        return Promise.resolve(new W.Response(JSON.stringify({ message:'Forbidden' }), { status:403 }));
+      };
+      S.set(K.gistToken, 'fake_token');
+      S.set(K.gistId, 'some_id');
+      let errMsg = '';
+      try { await GistBackup.push(); } catch(e) { errMsg = e.message; }
+      finally { W.fetch = origFetch; W.localStorage.removeItem(K.gistToken); }
+      eq(count, 1, '403 不應重試，只呼叫一次 fetch');
+      assert(errMsg.length > 0, '應拋出錯誤訊息');
+    }));
+  });
+
+  // ── 並發保護（架構驗證）────────────────────────────────────────────────────
+  describe('GistBackup — 並發保護架構', () => {
+    it('GistBackup 物件不含 _gistSyncing（並發保護在 _doGistPush 閉包內）', () => {
+      assert(!('_gistSyncing' in GistBackup), '_gistSyncing 應在閉包中，不暴露在 GistBackup 上');
+    });
+
+    it('signal abort 後 fetch promise 不會繼續 resolve', withTimeout(async () => {
+      const ctrl = new AbortController();
+      let fetchCompleted = false;
+      const p = new Promise((resolve, reject) => {
+        const sig = ctrl.signal;
+        if (sig.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+        sig.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        setTimeout(() => { fetchCompleted = true; resolve('late'); }, 500);
+      }).catch(() => {});
+      ctrl.abort();
+      await p;
+      assert(!fetchCompleted, 'abort 後不應執行 resolve（fetch 已中斷）');
+    }));
+  });
+
+  // ── online 事件 smoke test ──────────────────────────────────────────────
+  describe('window.online 事件 — 重新連網補推', () => {
+    it('dispatch online 事件不崩潰（smoke test）', () => {
+      let threw = false;
+      try { W.dispatchEvent(new W.Event('online')); }
+      catch(e) { threw = true; }
+      assert(!threw, 'dispatch online 不應拋出錯誤');
+    });
+
+    it('offline → online 切換不崩潰', () => {
+      let threw = false;
+      try {
+        W.dispatchEvent(new W.Event('offline'));
+        W.dispatchEvent(new W.Event('online'));
+      } catch(e) { threw = true; }
+      assert(!threw, 'offline → online 切換不應拋出錯誤');
+    });
+  });
+
   // ── 執行測試 ────────────────────────────────────────────────────────────────
   document.getElementById('summary').textContent = '⏳ 執行測試中...';
 
@@ -811,8 +978,15 @@
     const cases = [];
     for (const c of suite.cases) {
       let ok = true, err = '';
-      try { await c.fn(); }
-      catch(e) { ok = false; err = e.message; }
+      try {
+        // 每個 test 最多 10 秒，防止 mock fetch 未 abort 造成整體卡住
+        let tid;
+        const timeout = new Promise((_, rej) => {
+          tid = setTimeout(() => rej(new Error('測試超時（10s）')), 10000);
+        });
+        await Promise.race([Promise.resolve(c.fn()), timeout]);
+        clearTimeout(tid);
+      } catch(e) { ok = false; err = e.message; }
       if (ok) pass++; else fail++;
       cases.push({ name: c.name, ok, err });
     }

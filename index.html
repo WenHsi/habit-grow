@@ -885,7 +885,7 @@ const GistBackup={
     return id;
   },
   fileName(){return 'habit-grow-'+this.deviceId().slice(0,8)+'.enc';},
-  async push(){
+  async push(signal){
     const token=this.token();if(!token)throw new Error('未設定 GitHub Token');
     const data={version:1,exportedAt:localISO(),habits:DB.habits(),groups:DB.groups(),comps:DB.comps(),scheds:DB.scheds()};
     const enc=await gistEncrypt(JSON.stringify(data),this.pwHash());
@@ -894,8 +894,10 @@ const GistBackup={
     const uname=S.get(K.userName,'')||'user';
     const desc=`habit-grow · ${uname} · ${this.deviceId().slice(0,6)}`;
     const body=JSON.stringify({description:desc,public:false,files:{[fname]:{content:enc}}});
-    const gid=this.gistId();
-    const res=await fetch(gid?`https://api.github.com/gists/${gid}`:'https://api.github.com/gists',{method:gid?'PATCH':'POST',headers,body});
+    let gid=this.gistId();
+    let res=await fetch(gid?`https://api.github.com/gists/${gid}`:'https://api.github.com/gists',{method:gid?'PATCH':'POST',headers,body,signal});
+    // Gist 被刪除時 → 清掉舊 id，改用 POST 重新建立
+    if(res.status===404&&gid){this.setGistId('');gid='';res=await fetch('https://api.github.com/gists',{method:'POST',headers,body,signal});}
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.message||`HTTP ${res.status}`);}
     const json=await res.json();this.setGistId(json.id);this.setBackedAt(localISO());return json.id;
   },
@@ -2121,21 +2123,29 @@ function showApp(){
   async function _doGistPush(opts={}){
     // opts: { silent, throw }
     if(!GistBackup.token()||!navigator.onLine)return;
+    // Bug B fix: 手動備份也要防止並發
+    if(_gistSyncing&&!opts.throw)return;
+    if(_gistSyncing&&opts.throw)throw new Error('同步中，請稍候');
     if(!opts.throw)_gistLastAttempt=Date.now();
     const _t0=Date.now();
     _gistSyncing=true; _gistErrMsg=''; _gistLastDuration=''; updateGistIndicator();
+    // Bug A fix: 30 秒 timeout，防止 fetch 永遠 pending
+    const ctrl=new AbortController();
+    const _tout=setTimeout(()=>ctrl.abort(),30000);
     try{
-      await GistBackup.push();
+      await GistBackup.push(ctrl.signal);
+      clearTimeout(_tout);
       _gistLastDuration=((Date.now()-_t0)/1000).toFixed(1)+'s';
       _gistDirty=false;
       if(!opts.silent)showToast('Gist 備份成功');
       refreshGistStatus();
       _gistErrMsg='';
     }catch(e){
-      _gistErrMsg=e.message;
-      console.warn('Gist push failed:',e.message);
+      clearTimeout(_tout);
+      _gistErrMsg=e.name==='AbortError'?'連線逾時（30s）':e.message;
+      console.warn('Gist push failed:',_gistErrMsg);
       _gistSyncing=false; updateGistIndicator();
-      if(opts.throw)throw e; else return;
+      if(opts.throw)throw new Error(_gistErrMsg); else return;
     }
     _gistSyncing=false; updateGistIndicator();
   }
@@ -2163,6 +2173,8 @@ function showApp(){
   }
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')_onLeave();});
   window.addEventListener('blur',_onLeave);
+  // Bug C fix: 重新連網時，若有未推送資料立即補推
+  window.addEventListener('online',()=>{if(_canAutoPush())_doGistPush({silent:true});});
   ['saveHabits','saveGroups','saveComps','saveScheds'].forEach(m=>{
     const orig=DB[m].bind(DB);
     DB[m]=function(...a){orig(...a);_gistDirty=true;scheduleAutoGist();};
