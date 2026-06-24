@@ -2192,7 +2192,8 @@ function showApp(){
   updateUserAvBtn();
   document.getElementById('user-av-btn').addEventListener('click',()=>showProfileModal(false));
 
-  requestAnimationFrame(()=>{
+  // 雙層 rAF：iOS Safari 需要兩幀才算完 env(safe-area-inset-bottom)，避免 nav 跳動
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
     document.getElementById('auth-screen').style.display='none';
     document.getElementById('app').style.display='block';
     document.getElementById('bottom-nav').style.display='flex';
@@ -2207,7 +2208,7 @@ function showApp(){
     updateUndoBtns();
     // 首次使用：若無使用者名稱，提示設定
     if(!S.get(K.userName,''))setTimeout(()=>showProfileModal(true),400);
-  });
+  }));
 }
 
 // iOS 鍵盤彈出時動態調整 body padding，讓 dropdown 不被遮住
