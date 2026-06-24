@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>habit-grow — 測試套件</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f0f0;padding:16px}
+  h1{font-size:20px;margin-bottom:12px;color:#222}
+  #summary{padding:10px 14px;border-radius:8px;font-size:14px;font-weight:600;margin-bottom:16px}
+  #summary.pass{background:#d4edda;color:#155724}
+  #summary.fail{background:#f8d7da;color:#721c24}
+  #summary.running{background:#fff3cd;color:#856404}
+  .suite{margin-bottom:20px}
+  .suite-title{font-size:13px;font-weight:700;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+  .case{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:5px;margin-bottom:3px;font-size:13px}
+  .case.pass{background:#f0faf3}
+  .case.fail{background:#fff2f2}
+  .icon{flex-shrink:0;font-size:14px}
+  .name{color:#333;flex:1}
+  .err{color:#c00;font-size:11px;margin-top:2px;font-family:monospace;word-break:break-word}
+  #frame-wrap{position:fixed;right:-9999px;width:400px;height:600px}
+  iframe{width:100%;height:100%;border:0}
+  .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;margin-left:6px}
+  .badge.pass{background:#28a745;color:#fff}
+  .badge.fail{background:#dc3545;color:#fff}
+</style>
+</head>
+<body>
+<h1>habit-grow 測試套件</h1>
+<div id="summary" class="running">⏳ 載入應用程式...</div>
+<div id="results"></div>
+<div id="frame-wrap"><iframe id="frame" src="index.html"></iframe></div>
+
+<script>
+(async () => {
+  // ── Mini Test Runner ────────────────────────────────────────────────────────
+  const suites = [];
+  let currentSuite = null;
+
+  function describe(name, fn) {
+    const suite = { name, cases: [] };
+    suites.push(suite);
+    currentSuite = suite;
+    fn();
+    currentSuite = null;
+  }
+
+  function it(name, fn) {
+    currentSuite.cases.push({ name, fn });
+  }
+
+  function assert(cond, msg) {
+    if (!cond) throw new Error(msg || '斷言失敗');
+  }
+  function eq(a, b, msg) {
+    if (a !== b) throw new Error(msg || `期望 ${JSON.stringify(b)}，但得到 ${JSON.stringify(a)}`);
+  }
+  function deepEq(a, b, msg) {
+    if (JSON.stringify(a) !== JSON.stringify(b))
+      throw new Error(msg || `期望 ${JSON.stringify(b)}，但得到 ${JSON.stringify(a)}`);
+  }
+  function notThrows(fn, msg) {
+    try { fn(); } catch(e) { throw new Error(msg || `不應拋出錯誤: ${e.message}`); }
+  }
+
+  // ── 等待 iframe 載入 ────────────────────────────────────────────────────────
+  const frame = document.getElementById('frame');
+  await new Promise(resolve => {
+    if (frame.contentDocument && frame.contentDocument.readyState === 'complete') return resolve();
+    frame.addEventListener('load', resolve, { once: true });
+  });
+  // 給應用程式 JS 執行時間（DOMContentLoaded 後的初始化）
+  await new Promise(r => setTimeout(r, 300));
+
+  const W = frame.contentWindow;
+
+  // const 宣告不掛到 window，用 inject script 方式暴露
+  const exposeScript = W.document.createElement('script');
+  exposeScript.textContent = `
+    try {
+      window.__habitTest = {
+        DB, Hist, S, K, GistBackup, gistEncrypt, gistDecrypt,
+        dateKey, pad, fmtDateTime, _nameToColor, makeInitialAvatar,
+        cleanupEmptyScheduleDays, localISO, uid
+      };
+    } catch(e) { window.__habitTestErr = e.message; }
+  `;
+  W.document.body.appendChild(exposeScript);
+  await new Promise(r => setTimeout(r, 50));
+
+  if (W.__habitTestErr || !W.__habitTest) {
+    document.getElementById('summary').textContent =
+      `❌ 無法暴露 app 變數：${W.__habitTestErr || '未知錯誤'}（確認 index.html 在同目錄，且從 http://localhost 開啟）`;
+    document.getElementById('summary').className = 'fail';
+    return;
+  }
+
+  const { DB, Hist, S, K, GistBackup, gistEncrypt, gistDecrypt,
+          dateKey, pad, fmtDateTime, _nameToColor, makeInitialAvatar,
+          cleanupEmptyScheduleDays, localISO, uid } = W.__habitTest;
+
+  // ── localStorage 快照 / 還原 ────────────────────────────────────────────────
+  function lsSnap() {
+    const snap = {};
+    for (const k of Object.values(K)) snap[k] = W.localStorage.getItem(k);
+    // also snap hist/autofocus
+    snap[K.autofocus]  = W.localStorage.getItem(K.autofocus);
+    snap['h_autofocus']= W.localStorage.getItem('h_autofocus');
+    return snap;
+  }
+  function lsRestore(snap) {
+    for (const [k, v] of Object.entries(snap)) {
+      if (v === null) W.localStorage.removeItem(k);
+      else W.localStorage.setItem(k, v);
+    }
+  }
+  function lsClearApp() {
+    for (const k of Object.values(K)) W.localStorage.removeItem(k);
+    W.localStorage.removeItem('h_autofocus');
+  }
+
+  // 每個 test 用這個包裝：先清空，跑完後還原
+  function withState(fn) {
+    return async () => {
+      const snap = lsSnap();
+      lsClearApp();
+      // Hist._stack / _idx 是讀 localStorage 的方法，清 localStorage 就等於重設
+      // 不能直接賦值覆蓋方法
+      try { await fn(); }
+      finally { lsRestore(snap); }
+    };
+  }
+
+  // 產生測試用習慣
+  function mkHabit(overrides = {}) {
+    return { id: uid(), name: '測試習慣', isFocus: false, groupId: null, createdAt: localISO(), ...overrides };
+  }
+
+  // 未來/過去日期：用 app 的 dateKey()（本地時區），避免 UTC 偏移造成誤差
+  function futureDate(daysAhead = 1) {
+    const d = new Date(); d.setDate(d.getDate() + daysAhead);
+    return dateKey(d);
+  }
+  function pastDate(daysAgo = 1) {
+    const d = new Date(); d.setDate(d.getDate() - daysAgo);
+    return dateKey(d);
+  }
+
+  // ── 測試套件定義 ────────────────────────────────────────────────────────────
+
+  // 1. 工具函式
+  describe('工具函式', () => {
+    it('pad: 個位數補零', () => {
+      eq(pad(5), '05');
+      eq(pad(10), '10');
+      eq(pad(0), '00');
+    });
+
+    it('dateKey: 回傳 YYYY-MM-DD 格式', () => {
+      const dk = dateKey();
+      assert(/^\d{4}-\d{2}-\d{2}$/.test(dk), `格式錯誤: ${dk}`);
+    });
+
+    it('dateKey: 傳入 Date 物件', () => {
+      const d = new Date('2025-01-15');
+      const dk = dateKey(d);
+      eq(dk, '2025-01-15');
+    });
+
+    it('fmtDateTime: 包含秒數', () => {
+      const iso = '2026-06-24T23:24:05';
+      const result = fmtDateTime(iso);
+      assert(result.includes(':05'), `應包含秒數 :05，但得到: ${result}`);
+      assert(result.includes('2026'), '應包含年份');
+    });
+
+    it('fmtDateTime: 時分秒都有補零', () => {
+      const iso = '2026-01-05T09:08:07';
+      const result = fmtDateTime(iso);
+      assert(result.includes('09:08:07'), `應包含 09:08:07，但得到: ${result}`);
+    });
+  });
+
+  // 2. makeInitialAvatar / _nameToColor
+  describe('使用者頭像', () => {
+    it('makeInitialAvatar 回傳合法 JSON', () => {
+      const raw = makeInitialAvatar('譯賢');
+      notThrows(() => JSON.parse(raw), '應是合法 JSON');
+    });
+
+    it('makeInitialAvatar 結構正確：type=initial, color, initial', () => {
+      const d = JSON.parse(makeInitialAvatar('Kevin'));
+      eq(d.type, 'initial');
+      assert(typeof d.color === 'string' && d.color.startsWith('#'), 'color 應是十六進位色碼');
+      eq(d.initial, 'K');
+    });
+
+    it('makeInitialAvatar 空名用 ?', () => {
+      const d = JSON.parse(makeInitialAvatar(''));
+      eq(d.initial, '?');
+    });
+
+    it('_nameToColor: 同名稱回傳相同顏色（確定性）', () => {
+      eq(_nameToColor('Alice'), _nameToColor('Alice'));
+    });
+
+    it('_nameToColor: 不同名稱允許不同顏色', () => {
+      // 不要求不同，只要它不崩潰
+      notThrows(() => { _nameToColor('A'); _nameToColor('B'); _nameToColor(''); });
+    });
+  });
+
+  // 3. DB 基本讀寫
+  describe('DB — 基本讀寫', () => {
+    it('DB.habits 預設回傳空陣列', withState(() => {
+      deepEq(DB.habits(), []);
+    }));
+
+    it('DB.saveHabits / DB.habits 讀寫一致', withState(() => {
+      const h = [mkHabit({ name: '跑步' })];
+      DB.saveHabits(h);
+      deepEq(DB.habits(), h);
+    }));
+
+    it('DB.scheds 預設回傳空物件', withState(() => {
+      deepEq(DB.scheds(), {});
+    }));
+
+    it('DB.hmap 回傳 id→habit map', withState(() => {
+      const h = mkHabit({ id: 'h1', name: '讀書' });
+      DB.saveHabits([h]);
+      eq(DB.hmap()['h1'].name, '讀書');
+    }));
+
+    it('DB.focusIds 只回傳 isFocus=true', withState(() => {
+      DB.saveHabits([
+        mkHabit({ id: 'f1', isFocus: true }),
+        mkHabit({ id: 'f2', isFocus: false }),
+      ]);
+      const ids = DB.focusIds();
+      assert(ids.has('f1'), 'f1 應在');
+      assert(!ids.has('f2'), 'f2 不應在');
+    }));
+  });
+
+  // 4. DB.setDay
+  describe('DB.setDay — 排程去重', () => {
+    it('重複 id 只保留第一筆', withState(() => {
+      DB.setDay('2099-01-01', ['a', 'b', 'a', 'c', 'b']);
+      deepEq(DB.scheds()['2099-01-01'], ['a', 'b', 'c']);
+    }));
+
+    it('空陣列可正常儲存', withState(() => {
+      DB.setDay('2099-01-02', []);
+      deepEq(DB.scheds()['2099-01-02'], []);
+    }));
+  });
+
+  // 5. DB.getOrCreateDay
+  describe('DB.getOrCreateDay — 重點培養自動注入', () => {
+    it('新日期：自動填入重點培養習慣', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const ids = DB.getOrCreateDay('2099-02-01');
+      assert(ids.includes('f1'), '應包含重點培養 f1');
+    }));
+
+    it('已存在日期：把缺漏的重點培養習慣 prepend', withState(() => {
+      DB.saveHabits([
+        mkHabit({ id: 'f1', isFocus: true }),
+        mkHabit({ id: 'f2', isFocus: true }),
+      ]);
+      // 先建立只有 f1 的日期
+      DB.setDay('2099-02-02', ['f1', 'manual1']);
+      // getOrCreateDay 應把 f2 prepend
+      const ids = DB.getOrCreateDay('2099-02-02');
+      assert(ids[0] === 'f2', 'f2 應在最前面');
+      assert(ids.includes('f1'), 'f1 應保留');
+      assert(ids.includes('manual1'), 'manual1 應保留');
+    }));
+
+    it('重點培養不重複注入', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      DB.getOrCreateDay('2099-02-03');
+      const ids = DB.getOrCreateDay('2099-02-03');
+      eq(ids.filter(x => x === 'f1').length, 1, 'f1 不應重複');
+    }));
+
+    it('無重點培養：回傳空陣列', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'h1', isFocus: false })]);
+      const ids = DB.getOrCreateDay('2099-02-04');
+      deepEq(ids, []);
+    }));
+
+    it('autofocus 記錄：自動注入的 id 有被記錄', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      DB.getOrCreateDay('2099-02-05');
+      const af = DB.autofocus();
+      assert((af['2099-02-05'] || []).includes('f1'), '應記錄自動注入');
+    }));
+  });
+
+  // 6. DB.isDoneOnDay / addCompOnDay / removeComp
+  describe('DB — 完成紀錄', () => {
+    it('isDoneOnDay：完成後回傳 true', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'h1' })]);
+      DB.addCompOnDay('h1', dateKey());
+      assert(DB.isDoneOnDay('h1', dateKey()), '今天完成應為 true');
+    }));
+
+    it('isDoneOnDay：未完成回傳 false', withState(() => {
+      assert(!DB.isDoneOnDay('nonexist', dateKey()), '未完成應為 false');
+    }));
+
+    it('addCompOnDay 非今天：eod 模式儲存 T23:59:59', withState(() => {
+      S.set(K.comptime, 'eod');
+      const dk = futureDate(1);
+      DB.addCompOnDay('h1', dk);
+      const comps = DB.comps();
+      const c = comps.find(x => x.habitId === 'h1');
+      assert(c, '應有 completion 記錄');
+      assert(c.at.endsWith('T23:59:59'), `應是 T23:59:59，但得到 ${c.at}`);
+    }));
+
+    it('removeComp：移除最後一筆', withState(() => {
+      DB.addCompOnDay('h1', dateKey());
+      DB.removeComp('h1', dateKey());
+      assert(!DB.isDoneOnDay('h1', dateKey()), '移除後應為 false');
+    }));
+  });
+
+  // 7. DB.syncFocusChange — 重點培養移除邏輯（已知坑）
+  describe('DB.syncFocusChange — 取消重點培養', () => {
+    it('nowFocus=true 什麼都不做', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = futureDate(1);
+      DB.setDay(dk, ['f1']);
+      DB.syncFocusChange('f1', true);
+      assert(DB.scheds()[dk].includes('f1'), '不應移除');
+    }));
+
+    it('nowFocus=false：自動注入且未完成 → 移除', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: false })]);
+      const dk = futureDate(1);
+      // 模擬被自動注入
+      DB.addAutoFocus(dk, 'f1');
+      DB.setDay(dk, ['f1', 'other']);
+      DB.syncFocusChange('f1', false);
+      const ids = DB.scheds()[dk];
+      assert(!ids.includes('f1'), '自動注入且未完成應被移除');
+      assert(ids.includes('other'), 'other 應保留');
+    }));
+
+    it('nowFocus=false：手動加入（非 autofocus）→ 保留', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: false })]);
+      const dk = futureDate(1);
+      // 手動加入，不呼叫 addAutoFocus
+      DB.setDay(dk, ['f1', 'other']);
+      DB.syncFocusChange('f1', false);
+      const ids = DB.scheds()[dk];
+      assert(ids.includes('f1'), '手動加入應保留');
+    }));
+
+    it('nowFocus=false：已完成 → 保留（即使是自動注入）', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: false })]);
+      const dk = futureDate(1);
+      DB.addAutoFocus(dk, 'f1');
+      DB.setDay(dk, ['f1']);
+      // 模擬已完成：手動加一筆 comp
+      const c = DB.comps();
+      c.push({ id: uid(), habitId: 'f1', at: dk + 'T12:00:00' });
+      DB.saveComps(c);
+      DB.syncFocusChange('f1', false);
+      const ids = DB.scheds()[dk];
+      assert(ids.includes('f1'), '已完成的應保留');
+    }));
+
+    it('nowFocus=false：今天以前的排程不受影響', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: false })]);
+      const dk = pastDate(1);
+      DB.addAutoFocus(dk, 'f1');
+      const sc = DB.scheds(); sc[dk] = ['f1']; DB.saveScheds(sc);
+      DB.syncFocusChange('f1', false);
+      // 昨天的排程應不受影響（syncFocusChange 只處理 >= today）
+      // 注意：today 本身也在範圍內
+      // past 日期應保留
+      assert((DB.scheds()[dk] || []).includes('f1'), '過去日期應保留');
+    }));
+  });
+
+  // 8. DB.cleanupHabit
+  describe('DB.cleanupHabit — 刪除習慣後清理排程', () => {
+    it('從所有日期的排程中移除', withState(() => {
+      DB.setDay('2099-03-01', ['h1', 'h2']);
+      DB.setDay('2099-03-02', ['h1', 'h3']);
+      DB.setDay('2099-03-03', ['h2', 'h3']);
+      DB.cleanupHabit('h1');
+      deepEq(DB.scheds()['2099-03-01'], ['h2']);
+      deepEq(DB.scheds()['2099-03-02'], ['h3']);
+      assert(!DB.scheds()['2099-03-01'].includes('h1'), 'h1 應被移除');
+    }));
+
+    it('不影響其他習慣', withState(() => {
+      DB.setDay('2099-03-04', ['h1', 'h2', 'h3']);
+      DB.cleanupHabit('h2');
+      const ids = DB.scheds()['2099-03-04'];
+      assert(ids.includes('h1'), 'h1 保留');
+      assert(ids.includes('h3'), 'h3 保留');
+    }));
+  });
+
+  // 9. cleanupEmptyScheduleDays — 排程頁切走時清理空日期（已知坑）
+  describe('cleanupEmptyScheduleDays — 空日期清理', () => {
+    it('移除未來的空日期', withState(() => {
+      const dk = futureDate(2);
+      DB.setDay(dk, []);
+      cleanupEmptyScheduleDays();
+      assert(!DB.scheds()[dk], '未來空日期應被移除');
+    }));
+
+    it('移除未來只有自動注入重點培養的日期', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = futureDate(3);
+      DB.addAutoFocus(dk, 'f1');
+      const sc = DB.scheds(); sc[dk] = ['f1']; DB.saveScheds(sc);
+      cleanupEmptyScheduleDays();
+      assert(!DB.scheds()[dk], '只有自動注入的未來日期應被移除');
+    }));
+
+    it('保留有手動加入習慣的未來日期', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = futureDate(4);
+      // f1 是 autofocus，manual1 是手動加的
+      DB.addAutoFocus(dk, 'f1');
+      const sc = DB.scheds(); sc[dk] = ['f1', 'manual1']; DB.saveScheds(sc);
+      cleanupEmptyScheduleDays();
+      assert(DB.scheds()[dk], '有手動習慣的未來日期應保留');
+    }));
+
+    it('不移除今天', withState(() => {
+      const today = dateKey();
+      DB.setDay(today, []);
+      cleanupEmptyScheduleDays();
+      // 今天不在清理範圍（只清理 dk > today）
+      // 有些實作包含今天，這裡確認行為符合原始碼（dk > today）
+      // 原始碼: if(dk>today){...}
+      assert(DB.scheds()[today] !== undefined, '今天不應被清理');
+    }));
+
+    it('不移除過去日期', withState(() => {
+      const dk = pastDate(1);
+      const sc = DB.scheds(); sc[dk] = []; DB.saveScheds(sc);
+      cleanupEmptyScheduleDays();
+      // 過去日期不在清理範圍
+      assert(DB.scheds()[dk] !== undefined, '過去日期不應被清理');
+    }));
+
+    it('同時有多個未來空日期：全部清理', withState(() => {
+      const dk1 = futureDate(1);
+      const dk2 = futureDate(2);
+      const dk3 = futureDate(3);
+      DB.setDay(dk1, []);
+      DB.setDay(dk2, []);
+      DB.setDay(dk3, ['manual']); // 有手動，不清
+      cleanupEmptyScheduleDays();
+      assert(!DB.scheds()[dk1], 'dk1 應被清理');
+      assert(!DB.scheds()[dk2], 'dk2 應被清理');
+      assert(DB.scheds()[dk3], 'dk3 應保留');
+    }));
+  });
+
+  // 10. Hist — Undo/Redo
+  describe('Hist — 歷史快照', () => {
+    it('DB.saveHabits 觸發 schedSnap（非 _snap 狀態下）', withState(async () => {
+      Hist._snap = false;
+      // Hist._stack() 是方法，讀 localStorage
+      const beforeLen = Hist._stack().length;
+      DB.saveHabits([mkHabit()]);
+      // schedSnap 用 setTimeout 0，等它執行
+      await new Promise(r => setTimeout(r, 80));
+      const afterLen = Hist._stack().length;
+      assert(afterLen > beforeLen, `快照數應增加：${beforeLen} → ${afterLen}`);
+    }));
+
+    it('_snap=true 時 DB.saveHabits 不觸發新快照', withState(async () => {
+      // 先讓初始快照存進去
+      DB.saveHabits([]);
+      await new Promise(r => setTimeout(r, 80));
+      const beforeLen = Hist._stack().length;
+      Hist._snap = true;
+      DB.saveHabits([mkHabit({ name: '_snap 測試' })]);
+      await new Promise(r => setTimeout(r, 80));
+      const afterLen = Hist._stack().length;
+      Hist._snap = false;
+      eq(afterLen, beforeLen, '_snap=true 不應新增快照');
+    }));
+
+    it('Hist.undo / redo / canUndo / canRedo 存在且可呼叫', () => {
+      assert(typeof Hist.undo === 'function', 'undo 應存在');
+      assert(typeof Hist.redo === 'function', 'redo 應存在');
+      assert(typeof Hist.canUndo === 'function', 'canUndo 應存在');
+      assert(typeof Hist.canRedo === 'function', 'canRedo 應存在');
+    });
+
+    it('canUndo：無快照時為 false', withState(() => {
+      assert(!Hist.canUndo(), '空狀態不能 undo');
+    }));
+
+    it('快照上限 MAX=20', withState(async () => {
+      Hist._snap = false;
+      // 寫入 25 次，每次等 setTimeout(0) 執行
+      for (let i = 0; i < 25; i++) {
+        DB.saveHabits([mkHabit({ name: `step-${i}` })]);
+        await new Promise(r => setTimeout(r, 30));
+      }
+      await new Promise(r => setTimeout(r, 100));
+      const len = Hist._stack().length;
+      assert(len <= Hist.MAX, `快照數應 ≤ ${Hist.MAX}，但有 ${len}`);
+    }));
+
+    it('Hist._idx() 讀 localStorage（方法，非屬性）', withState(() => {
+      // 確認是 function 而不是數字
+      assert(typeof Hist._idx === 'function', '_idx 應是方法');
+      assert(typeof Hist._stack === 'function', '_stack 應是方法');
+    }));
+  });
+
+  // 11. GistBackup — 加密往返
+  describe('GistBackup — 加密往返（Encryption Round-trip）', () => {
+    it('encrypt → decrypt 能還原明文', async () => {
+      const plain = '{"version":1,"test":true}';
+      const hash = 'testpwhash1234567890abcd';
+      const enc = await gistEncrypt(plain, hash);
+      const dec = await gistDecrypt(enc, hash);
+      eq(dec, plain, '解密結果應與原始明文相同');
+    });
+
+    it('每次加密結果不同（隨機 IV）', async () => {
+      const plain = 'hello';
+      const hash = 'testpwhash';
+      const enc1 = await gistEncrypt(plain, hash);
+      const enc2 = await gistEncrypt(plain, hash);
+      assert(enc1 !== enc2, '兩次加密結果應不同（隨機 IV/salt）');
+    });
+
+    it('錯誤密碼無法解密（應拋出錯誤）', async () => {
+      const plain = '{"secret":"data"}';
+      const enc = await gistEncrypt(plain, 'correcthash');
+      let threw = false;
+      try {
+        await gistDecrypt(enc, 'wronghash');
+      } catch(e) {
+        threw = true;
+      }
+      assert(threw, '錯誤密碼應拋出解密錯誤');
+    });
+
+    it('加密後是合法 Base64 字串', async () => {
+      const enc = await gistEncrypt('test data', 'hash123');
+      assert(typeof enc === 'string', '應是字串');
+      notThrows(() => atob(enc), '應是合法 Base64');
+    });
+  });
+
+  // 12. GistBackup.deviceId / fileName — 每裝置穩定（已知坑：多瀏覽器覆蓋）
+  describe('GistBackup.deviceId / fileName — 多瀏覽器隔離', () => {
+    it('deviceId 連續呼叫回傳相同值', withState(() => {
+      const id1 = GistBackup.deviceId();
+      const id2 = GistBackup.deviceId();
+      eq(id1, id2, 'deviceId 應穩定');
+    }));
+
+    it('fileName 包含 .enc 後綴', withState(() => {
+      const fn = GistBackup.fileName();
+      assert(fn.endsWith('.enc'), `fileName 應以 .enc 結尾：${fn}`);
+    }));
+
+    it('fileName 包含 habit-grow- 前綴', withState(() => {
+      const fn = GistBackup.fileName();
+      assert(fn.startsWith('habit-grow-'), `fileName 應以 habit-grow- 開頭：${fn}`);
+    }));
+
+    it('不同 deviceId 產生不同 fileName', withState(() => {
+      // 清掉 deviceId，模擬新裝置
+      W.localStorage.removeItem(K.deviceId);
+      const fn1 = GistBackup.fileName();
+      W.localStorage.removeItem(K.deviceId);
+      const fn2 = GistBackup.fileName();
+      assert(fn1 !== fn2, '不同裝置的 fileName 應不同');
+    }));
+  });
+
+  // 13. GistBackup.push — Token 缺少時拋出錯誤
+  describe('GistBackup.push — Token 驗證', () => {
+    it('無 Token 時 push() 拋出錯誤', async () => {
+      W.localStorage.removeItem(K.gistToken);
+      let threw = false;
+      try { await GistBackup.push(); } catch(e) { threw = true; }
+      assert(threw, '無 token 應拋出錯誤');
+    });
+
+    it('無 Token 時 pull() 拋出錯誤', async () => {
+      W.localStorage.removeItem(K.gistToken);
+      let threw = false;
+      try { await GistBackup.pull(); } catch(e) { threw = true; }
+      assert(threw, '無 token 應拋出錯誤');
+    });
+
+    it('有 Token 無 GistId 時 pull() 拋出「尚無備份」錯誤', async () => {
+      S.set(K.gistToken, 'fake_token');
+      W.localStorage.removeItem(K.gistId);
+      let errMsg = '';
+      try { await GistBackup.pull(); } catch(e) { errMsg = e.message; }
+      assert(errMsg.includes('尚無') || errMsg.length > 0, '應拋出有意義的錯誤訊息');
+    });
+  });
+
+  // 14. Regression：_gistErrMsg TDZ bug（已修復）
+  describe('Regression — _gistErrMsg TDZ 問題', () => {
+    it('index.html 載入時不應有 TDZ 錯誤（腳本正常執行）', () => {
+      // const 不掛 window，但 inject 後存在 __habitTest
+      // 若 TDZ 還在，整個腳本會崩潰，__habitTest 就不存在
+      assert(typeof DB === 'object', 'DB 存在代表腳本無 TDZ 錯誤');
+      assert(typeof Hist === 'object', 'Hist 存在代表腳本無 TDZ 錯誤');
+      assert(typeof GistBackup === 'object', 'GistBackup 存在代表腳本無 TDZ 錯誤');
+    });
+  });
+
+  // 15. Regression：_canAutoPush rate limit 無限重試（已修復）
+  describe('Regression — _gistDirty 防止無效推送', () => {
+    it('S/K 包含 gistToken/gistBkAt/deviceId 等 Gist 相關 key', () => {
+      // 驗證 K 結構完整
+      assert('gistToken' in K, 'K.gistToken 應存在');
+      assert('gistBkAt' in K, 'K.gistBkAt 應存在');
+      assert('deviceId' in K, 'K.deviceId 應存在');
+      assert('userName' in K, 'K.userName 應存在');
+      assert('userAvatar' in K, 'K.userAvatar 應存在');
+    });
+
+    it('backedAt 在首次 push 前為空字串', withState(() => {
+      eq(GistBackup.backedAt(), '');
+    }));
+  });
+
+  // 16. DB.getDay vs getOrCreateDay
+  describe('DB.getDay — 不寫入', () => {
+    it('getDay 不存在時回傳 null', withState(() => {
+      eq(DB.getDay('2099-12-31'), null);
+    }));
+
+    it('getDay 不自動建立日期', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      DB.getDay('2099-12-31'); // 不應建立
+      eq(DB.scheds()['2099-12-31'], undefined, 'getDay 不應建立排程');
+    }));
+  });
+
+  // 17. autofocus 記錄 — 與 syncFocusChange 的互動
+  describe('autofocus 記錄完整性', () => {
+    it('addAutoFocus / removeAutoFocus 正確', withState(() => {
+      DB.addAutoFocus('2099-05-01', 'h1');
+      assert(DB.autofocus()['2099-05-01'].includes('h1'), '應有 h1');
+      DB.removeAutoFocus('2099-05-01', 'h1');
+      assert(!(DB.autofocus()['2099-05-01'] || []).includes('h1'), 'h1 應被移除');
+    }));
+
+    it('多次 addAutoFocus 同一個 id 不重複', withState(() => {
+      DB.addAutoFocus('2099-05-02', 'h1');
+      DB.addAutoFocus('2099-05-02', 'h1');
+      eq(DB.autofocus()['2099-05-02'].filter(x => x === 'h1').length, 1, '不應重複');
+    }));
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 潛在漏洞測試（有些目前會 FAIL，代表真實 bug 存在）
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // BUG-1 已修復：cleanupHabit 同時清 autofocus map
+  describe('cleanupHabit 同時清 autofocus map', () => {
+    it('刪除習慣後 autofocus map 不應再有該 habitId', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = futureDate(1);
+      DB.addAutoFocus(dk, 'f1');
+      DB.cleanupHabit('f1');
+      const af = DB.autofocus();
+      assert(!(af[dk] || []).includes('f1'), 'autofocus map 應已清除 f1');
+    }));
+  });
+
+  // BUG-2 已修復：syncFocusChange 同步更新 autofocus map
+  describe('syncFocusChange 同步更新 autofocus map', () => {
+    it('取消重點培養並移除排程後，autofocus map 應同步清除', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: false })]);
+      const dk = futureDate(2);
+      DB.addAutoFocus(dk, 'f1');
+      DB.setDay(dk, ['f1']);
+      DB.syncFocusChange('f1', false);
+      const af = DB.autofocus();
+      assert(!(af[dk] || []).includes('f1'), 'syncFocusChange 後 autofocus map 應清除 f1');
+    }));
+
+    it('修復後 cleanupEmptyScheduleDays 不會誤判有 manual 的日期', withState(() => {
+      const dk = futureDate(3);
+      const sc = DB.scheds(); sc[dk] = ['manual1']; DB.saveScheds(sc);
+      DB.addAutoFocus(dk, 'f1'); // f1 不在排程，但 autofocus 有記錄
+      cleanupEmptyScheduleDays();
+      assert(DB.scheds()[dk] !== undefined, '有 manual1 的日期不應被清除');
+    }));
+  });
+
+  // BUG-3 已修復：addCompOnDay / addComp 加去重
+  describe('addCompOnDay / addComp 去重保護', () => {
+    it('重複呼叫 addCompOnDay 同一天只有一筆', withState(() => {
+      const dk = dateKey();
+      DB.addCompOnDay('h1', dk);
+      DB.addCompOnDay('h1', dk); // 重複呼叫應被忽略
+      const comps = DB.comps().filter(c => c.habitId === 'h1' && c.at.slice(0, 10) === dk);
+      eq(comps.length, 1, '去重後應只有一筆 completion');
+    }));
+
+    it('addComp 重複呼叫今天只有一筆', withState(() => {
+      DB.addComp('h1');
+      DB.addComp('h1');
+      const comps = DB.comps().filter(c => c.habitId === 'h1' && c.at.slice(0, 10) === dateKey());
+      eq(comps.length, 1, 'addComp 去重後應只有一筆');
+    }));
+
+    it('去重後 removeComp 能完整取消完成狀態', withState(() => {
+      const dk = dateKey();
+      DB.addCompOnDay('h1', dk);
+      DB.addCompOnDay('h1', dk); // 被忽略
+      DB.removeComp('h1', dk);
+      assert(!DB.isDoneOnDay('h1', dk), 'removeComp 後應為未完成');
+    }));
+  });
+
+  // BUG-4 已修復：getOrCreateDay 不對過去日期注入
+  describe('getOrCreateDay 過去日期邊界保護', () => {
+    it('對過去日期呼叫 getOrCreateDay 不注入當前重點培養', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = pastDate(5);
+      DB.getOrCreateDay(dk);
+      const ids = DB.scheds()[dk] || [];
+      assert(!ids.includes('f1'), '過去日期不應注入當前重點培養習慣');
+    }));
+
+    it('過去日期已有排程：getOrCreateDay 原樣回傳，不污染', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const dk = pastDate(3);
+      DB.setDay(dk, ['manual1']);
+      const ids = DB.getOrCreateDay(dk);
+      deepEq(ids, ['manual1'], '過去日期應原樣回傳，不 prepend 重點培養');
+    }));
+
+    it('今天仍正常注入重點培養', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'f1', isFocus: true })]);
+      const ids = DB.getOrCreateDay(dateKey());
+      assert(ids.includes('f1'), '今天應正常注入重點培養');
+    }));
+  });
+
+  // BUG-5：schedules 含已刪除習慣的 orphan id
+  describe('[BUG-5] orphan habitId 在排程中', () => {
+    it('cleanupHabit 確保排程不含已刪除的 habitId', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'gone' })]);
+      DB.setDay(futureDate(1), ['gone', 'other']);
+      DB.cleanupHabit('gone');
+      const ids = DB.scheds()[futureDate(1)] || [];
+      assert(!ids.includes('gone'), 'cleanupHabit 後排程不應含已刪除的 id');
+      assert(ids.includes('other'), 'other 應保留');
+    }));
+
+    it('若未呼叫 cleanupHabit，排程會殘留 orphan id（說明問題存在）', withState(() => {
+      DB.saveHabits([mkHabit({ id: 'orphan' })]);
+      const dk = futureDate(1);
+      DB.setDay(dk, ['orphan', 'real']);
+      // 直接刪習慣，不呼叫 cleanupHabit
+      DB.saveHabits([]);
+      // orphan id 仍在排程裡
+      const ids = DB.scheds()[dk] || [];
+      assert(ids.includes('orphan'),
+        '未呼叫 cleanupHabit 時 orphan id 仍存在排程（屬已知行為，需確保 UI 不崩潰）');
+    }));
+  });
+
+  // BUG-6：removeComp 行為邊界
+  describe('removeComp — 邊界行為', () => {
+    it('不存在的紀錄呼叫 removeComp 不應崩潰', withState(() => {
+      // 不應拋出錯誤
+      DB.removeComp('nonexist', dateKey());
+      assert(true, '不應拋出錯誤');
+    }));
+
+    it('removeComp 移除最後一筆（正確場景：只有一筆）', withState(() => {
+      const dk = dateKey();
+      DB.addCompOnDay('h1', dk);
+      eq(DB.comps().filter(c => c.habitId === 'h1').length, 1);
+      DB.removeComp('h1', dk);
+      eq(DB.comps().filter(c => c.habitId === 'h1').length, 0);
+    }));
+  });
+
+  // ── 執行測試 ────────────────────────────────────────────────────────────────
+  document.getElementById('summary').textContent = '⏳ 執行測試中...';
+
+  let pass = 0, fail = 0;
+  const suiteDoms = [];
+
+  for (const suite of suites) {
+    const cases = [];
+    for (const c of suite.cases) {
+      let ok = true, err = '';
+      try { await c.fn(); }
+      catch(e) { ok = false; err = e.message; }
+      if (ok) pass++; else fail++;
+      cases.push({ name: c.name, ok, err });
+    }
+    suiteDoms.push({ suite: suite.name, cases });
+  }
+
+  // ── 渲染結果 ────────────────────────────────────────────────────────────────
+  const total = pass + fail;
+  const summary = document.getElementById('summary');
+  summary.className = fail === 0 ? 'pass' : 'fail';
+  summary.innerHTML = fail === 0
+    ? `✅ 全部通過 ${pass} / ${total}`
+    : `❌ 失敗 ${fail} / ${total}　通過 ${pass} / ${total}`;
+
+  const resultsEl = document.getElementById('results');
+  for (const { suite, cases } of suiteDoms) {
+    const suitePass = cases.filter(c => c.ok).length;
+    const suiteFail = cases.length - suitePass;
+    const el = document.createElement('div');
+    el.className = 'suite';
+    el.innerHTML = `<div class="suite-title">${suite}
+      <span class="badge pass">${suitePass} 通過</span>
+      ${suiteFail ? `<span class="badge fail">${suiteFail} 失敗</span>` : ''}
+    </div>`;
+    for (const c of cases) {
+      const row = document.createElement('div');
+      row.className = 'case ' + (c.ok ? 'pass' : 'fail');
+      row.innerHTML = `<span class="icon">${c.ok ? '✓' : '✗'}</span>
+        <div><div class="name">${c.name}</div>
+        ${c.err ? `<div class="err">${c.err}</div>` : ''}</div>`;
+      el.appendChild(row);
+    }
+    resultsEl.appendChild(el);
+  }
+})();
+</script>
+</body>
+</html>
