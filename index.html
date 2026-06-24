@@ -154,6 +154,15 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .check-btn svg { opacity: 0; transition: opacity .15s; }
 .check-btn.on svg { opacity: 1; }
 .slot-item.is-focus .check-btn { border-color: var(--border); }
+.slot-name-wrap { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
+.slot-name-wrap .slot-name { flex: unset; }
+.slot-parent-tag { font-size: 11px; color: var(--sub); line-height: 1; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.slot-item.is-parent .slot-name { font-weight: 600; }
+.slot-sub-count { font-size: 11px; color: var(--sub); flex-shrink: 0; margin-right: 2px; pointer-events: none; }
+.slot-list .group-section { /* no extra margin */ }
+.slot-list .group-items { display: flex; flex-direction: column; gap: 0; }
+.slot-list .sub-list { margin: 0; gap: 0; }
+.slot-item.nest-candidate { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-bg); }
 
 /* ── Slot Name / Actions ── */
 .slot-name { flex: 1; font-size: 15px; cursor: pointer; border-radius: 4px; padding: 1px 3px; transition: background .12s; }
@@ -208,15 +217,34 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .stat-item.is-focus { border-left: 3px solid var(--focus-line); }
 .stat-row { display: flex; align-items: center; padding: 11px 14px; cursor: pointer; gap: 10px; }
 .stat-name { flex: 1; font-size: 15px; }
+.stat-parent-name { display: flex; align-items: center; gap: 5px; }
 .stat-count { font-size: 13px; color: var(--sub); }
 .stat-chev { color: var(--sub); transition: transform .2s; flex-shrink: 0; }
 .stat-item.open .stat-chev { transform: rotate(90deg); }
-.stat-history { display: none; border-top: 1px solid var(--border); max-height: calc(34px * 3); overflow-y: auto; }
+.stat-history { display: none; border-top: 1px solid var(--border); }
+.hist-scroll { max-height: calc(34px * 3.5); overflow-y: auto; }
 .stat-item.open .stat-history { display: block; }
-.hist-entry { padding: 7px 14px; font-size: 13px; color: var(--sub); border-bottom: 1px solid var(--border); }
+.hist-entry { padding: 7px 14px; font-size: 13px; color: var(--sub); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
 .hist-entry:last-child { border-bottom: none; }
 .hist-entry[data-id] { cursor: pointer; transition: background .1s; }
 .hist-entry[data-id]:hover { background: var(--accent-bg); }
+.hist-time { flex: 1; }
+.hist-del-btn { border: none; background: none; color: var(--sub); cursor: pointer; padding: 2px 5px; font-size: 15px; line-height: 1; opacity: 0.5; flex-shrink: 0; border-radius: 4px; transition: all .15s; }
+.hist-del-btn:hover { opacity: 1; color: var(--danger); background: rgba(201,108,98,.1); }
+#stats-global-chart:not(:empty) { background: var(--surface); border-radius: var(--r); border: 1px solid var(--border); padding: 8px 14px 4px; margin-bottom: 10px; box-shadow: var(--sh); }
+.stat-chart-toggle { font-size: 11px; padding: 2px 9px; border-radius: 20px; border: 1.5px solid var(--border); color: var(--sub); cursor: pointer; white-space: nowrap; transition: all .15s; }
+.stat-chart-toggle:hover,.stat-chart-toggle.on { border-color: var(--accent); color: var(--accent); }
+.stat-sub-section { border-top: 1px solid var(--border); }
+.stat-sub-hdr { display: flex; align-items: center; padding: 7px 14px; gap: 8px; cursor: pointer; background: var(--bg); }
+.stat-sub-hdr:hover { background: var(--accent-bg); }
+.stat-sub-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.stat-sub-name { flex: 1; font-size: 13px; }
+.stat-sub-section .stat-chev { transition: transform .2s; }
+.stat-sub-section.open .stat-chev { transform: rotate(90deg); }
+.stat-sub-history { display: none; }
+.stat-sub-section.open .stat-sub-history { display: block; }
+.stat-chart-area { padding: 8px 14px 4px; border-top: 1px solid var(--border); overflow: clip; }
+.stat-chart-area:empty { display: none; }
 
 /* ── Habits Management ── */
 .group-section { margin-bottom: 18px; }
@@ -232,9 +260,10 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .group-action-btn:hover { opacity: 1; color: var(--accent); }
 .group-items { display: flex; flex-direction: column; gap: 4px; min-height: 4px; transition: background .15s, border .15s; }
 
-.mgmt-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; display: flex; align-items: center; gap: 9px; box-shadow: var(--sh); }
+.mgmt-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; align-items: stretch; box-shadow: var(--sh); }
 .mgmt-item.is-focus { border-left: 3px solid var(--focus-line); }
 .mgmt-item.is-dragging { opacity: .35; }
+.habit-row { display: flex; align-items: center; gap: 9px; }
 .mgmt-name { flex: 1; font-size: 15px; cursor: text; border-radius: 4px; padding: 1px 4px; }
 .mgmt-name:hover { background: rgba(0,0,0,.04); }
 .mgmt-name-input { flex: 1; font-size: 15px; border-bottom: 1.5px solid var(--accent); background: transparent; padding: 1px 4px; }
@@ -242,6 +271,11 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 .focus-toggle.on { background: var(--focus-chip-bg); border-color: var(--focus-line); color: var(--focus-chip-text); }
 .del-btn { color: var(--sub); padding: 4px; opacity: .4; transition: opacity .15s; flex-shrink: 0; }
 .del-btn:hover { opacity: 1; color: var(--danger); }
+.sub-list { margin: 6px 0 2px 28px; display: flex; flex-direction: column; gap: 4px; }
+.sub-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; display: flex; align-items: center; gap: 8px; }
+.sub-item-name { flex: 1; font-size: 14px; cursor: text; border-radius: 4px; padding: 1px 4px; color: var(--text); }
+.sub-item-name:hover { background: rgba(0,0,0,.04); }
+.mgmt-item.nest-candidate { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-bg); }
 
 .new-habit-bar { display: flex; gap: 8px; margin-top: 14px; }
 .new-habit-input { flex: 1; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: 14px; background: var(--surface); transition: border-color .15s; }
@@ -251,7 +285,8 @@ input, select { font: inherit; border: none; outline: none; color: var(--text); 
 
 .add-group-btn { width: 100%; padding: 10px; border: 1.5px dashed var(--border); border-radius: 9px; color: var(--sub); font-size: 13px; text-align: center; cursor: pointer; margin-top: 6px; background: transparent; transition: all .15s; }
 .add-group-btn:hover { border-color: var(--accent); color: var(--accent); }
-.clean-habits-btn { padding: 6px 0; border: none; color: var(--danger); font-size: 12px; text-align: right; cursor: pointer; margin-top: 8px; background: transparent; display: block; width: 100%; opacity: .7; transition: opacity .15s; }
+.clean-habits-btn { padding: 6px 0; border: none; color: var(--danger); font-size: 12px; cursor: pointer; margin-top: 8px; background: transparent; display: block; width: fit-content; margin-left: auto; opacity: .7; transition: opacity .15s; }
+.mgmt-parent-icon { color: var(--sub); display: flex; align-items: center; flex-shrink: 0; opacity: 0.7; }
 .clean-habits-btn:hover { opacity: 1; }
 
 /* ── Modal ── */
@@ -381,6 +416,7 @@ if('serviceWorker' in navigator){
   <!-- 紀錄 -->
   <div class="page" id="page-stats">
     <div class="sort-chips" id="stats-sort-chips" style="visibility:hidden;position:absolute"></div>
+    <div id="stats-global-chart"></div>
     <div id="stats-list"></div>
     <div class="site-credit">© <span class="cp-year"></span> <a href="https://github.com/WenHsi" target="_blank" rel="noopener noreferrer" class="credit-link">wenhsi</a></div>
   </div>
@@ -543,6 +579,7 @@ function updateThemeBtn(){
 
 // ══ VIEW STATE ══
 let viewDate=null;
+let _statsChartMode='';
 
 // ══ UTILS ══
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36)}
@@ -562,6 +599,7 @@ async function sha256(str){const b=await crypto.subtle.digest('SHA-256',new Text
 
 // 習慣是否有排程或完成記錄（無引用才可直接刪除）
 function isHabitReferenced(id){
+  if(DB.habits().some(h=>h.parentId===id))return true;
   if(DB.comps().some(c=>c.habitId===id))return true;
   return Object.values(DB.scheds()).some(ids=>ids.includes(id));
 }
@@ -685,6 +723,9 @@ const DB={
   },
   // When habit deleted, remove from all schedules
   cleanupHabit(habitId){
+    // promote any sub-habits to top level
+    const all=this.habits();const children=all.filter(h=>h.parentId===habitId);
+    if(children.length){children.forEach(h=>delete h.parentId);this.saveHabits(all);}
     const sc=this.scheds();
     Object.keys(sc).forEach(dk=>{sc[dk]=sc[dk].filter(id=>id!==habitId)});
     this.saveScheds(sc);
@@ -720,6 +761,8 @@ const DB={
     }
     c.push({id:uid(),habitId,at});this.saveComps(c);
   },
+  subHabits(parentId){return this.habits().filter(h=>h.parentId===parentId)},
+  topLevelHabits(){return this.habits().filter(h=>!h.parentId)},
   hmap(){return Object.fromEntries(this.habits().map(h=>[h.id,h]))},
   focusIds(){return new Set(this.habits().filter(h=>h.isFocus).map(h=>h.id))},
 };
@@ -745,7 +788,61 @@ const SVG={
   grip:`<svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="4" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="11" cy="12" r="1.5"/></svg>`,
   hgrip:`<svg viewBox="0 0 16 10" fill="currentColor" width="14" height="10"><circle cx="4" cy="3" r="1.3"/><circle cx="12" cy="3" r="1.3"/><circle cx="4" cy="7" r="1.3"/><circle cx="12" cy="7" r="1.3"/></svg>`,
   x:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
+  folder:`<svg viewBox="0 0 20 16" fill="currentColor" width="13" height="11"><path d="M1 2.5C1 1.67 1.67 1 2.5 1h4.17c.46 0 .9.2 1.2.54L9.5 3H17.5C18.33 3 19 3.67 19 4.5v9c0 .83-.67 1.5-1.5 1.5h-15C1.67 15 1 14.33 1 13.5V2.5z" opacity=".25"/><path d="M1 5.5C1 4.67 1.67 4 2.5 4H17.5C18.33 4 19 4.67 19 5.5V13.5C19 14.33 18.33 15 17.5 15h-15C1.67 15 1 14.33 1 13.5V5.5z"/></svg>`,
 };
+
+// ══ CHART HELPERS ══
+const CHART_COLORS=['#6B9E8B','#E8A87C','#85B5C9','#C98B8B','#B5C985','#9B85C9','#C9C185','#C98BB5'];
+function getWeeks(n=8){
+  const ws=[];const now=new Date();
+  for(let w=n-1;w>=0;w--){const d=new Date(now);d.setDate(d.getDate()-w*7);d.setDate(d.getDate()-(d.getDay()===0?6:d.getDay()-1));ws.push(dateKey(d));}
+  return ws;
+}
+function makePieSVG(slices){
+  const filled=slices.filter(s=>s.count>0);
+  const total=filled.reduce((s,x)=>s+x.count,0);
+  if(!total)return'<p style="text-align:center;padding:12px 0;color:var(--sub)">尚無資料</p>';
+  const W=320,R=80,cx=90,cy=90;let paths='',textEls='';
+  if(filled.length===1){
+    // 單 slice = 100%，SVG arc 無法畫整圓，改用 circle
+    paths=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="${filled[0].color}"/>`;
+    textEls=`<text x="${cx}" y="${(cy+4)}" text-anchor="middle" font-size="11" fill="white" font-weight="700" font-family="system-ui">100%</text>`;
+  }else{
+    let angle=-Math.PI/2;
+    filled.forEach(s=>{
+      const a=2*Math.PI*(s.count/total);
+      const x1=cx+R*Math.cos(angle),y1=cy+R*Math.sin(angle);
+      const x2=cx+R*Math.cos(angle+a),y2=cy+R*Math.sin(angle+a);
+      const large=a>Math.PI?1:0;
+      paths+=`<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5"/>`;
+      if(s.count/total>0.07){const ma=angle+a/2;const lx=cx+R*.62*Math.cos(ma),ly=cy+R*.62*Math.sin(ma);textEls+=`<text x="${lx.toFixed(1)}" y="${(ly+3.5).toFixed(1)}" text-anchor="middle" font-size="11" fill="white" font-weight="700" font-family="system-ui">${Math.round(s.count/total*100)}%</text>`;}
+      angle+=a;
+    });
+  }
+  const PIE_FOLDER=`<path d="M1 2.5C1 1.67 1.67 1 2.5 1h4.17c.46 0 .9.2 1.2.54L9.5 3H17.5C18.33 3 19 3.67 19 4.5v9c0 .83-.67 1.5-1.5 1.5h-15C1.67 15 1 14.33 1 13.5V2.5z" opacity=".35"/><path d="M1 5.5C1 4.67 1.67 4 2.5 4H17.5C18.33 4 19 4.67 19 5.5V13.5C19 14.33 18.33 15 17.5 15h-15C1.67 15 1 14.33 1 13.5V5.5z"/>`;
+  let legend='';filled.forEach((s,i)=>{const y=10+i*22;const lbl=s.label.length>12?s.label.slice(0,12)+'…':s.label;legend+=`<rect x="180" y="${y}" width="10" height="10" rx="2" fill="${s.color}"/>`;if(s.isParent){legend+=`<g transform="translate(194,${y-1}) scale(0.475)" fill="var(--sub)">${PIE_FOLDER}</g><text x="205" y="${y+9}" font-size="12" fill="var(--text)" font-family="system-ui">${lbl} · ${s.count}次</text>`;}else{legend+=`<text x="194" y="${y+9}" font-size="12" fill="var(--text)" font-family="system-ui">${lbl} · ${s.count}次</text>`;}});
+  const H=Math.max(180,filled.length*22+20);
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">${paths}${textEls}${legend}</svg>`;
+}
+function makeLineSVG(lines,weekLabels){
+  if(!lines.length)return'<p style="text-align:center;padding:12px 0;color:var(--sub)">尚無資料</p>';
+  const W=320,padL=26,padB=22,padT=10,padR=18,chartH=110;
+  const chartW=W-padL-padR;const weeks=weekLabels.length;const maxVal=Math.max(...lines.flatMap(l=>l.data),1);
+  const px=i=>padL+i*(chartW/(weeks-1||1));const py=v=>padT+chartH*(1-v/maxVal);
+  let els=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+chartH}" stroke="var(--border)" stroke-width="1"/>`;
+  els+=`<line x1="${padL}" y1="${padT+chartH}" x2="${padL+chartW}" y2="${padT+chartH}" stroke="var(--border)" stroke-width="1"/>`;
+  for(let g=1;g<=maxVal&&g<=4;g++){const y=py(g).toFixed(1);if(parseFloat(y)<padT+4)break;els+=`<line x1="${padL}" y1="${y}" x2="${padL+chartW}" y2="${y}" stroke="var(--border)" stroke-width=".5" stroke-dasharray="3,3"/>`;}
+  const yLbl=v=>{const y=py(v);if(y<padT+6||y>padT+chartH-4)return'';return`<text x="${padL-4}" y="${y.toFixed(1)+4}" text-anchor="end" font-size="9" fill="var(--sub)" font-family="system-ui">${v}</text>`;};
+  for(let g=1;g<=maxVal&&g<=4;g++)els+=yLbl(g);
+  lines.forEach(l=>{const pts=l.data.map((v,i)=>`${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');els+=`<polyline points="${pts}" fill="none" stroke="${l.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;});
+  lines.forEach(l=>{l.data.forEach((v,i)=>{if(v>0)els+=`<circle cx="${px(i).toFixed(1)}" cy="${py(v).toFixed(1)}" r="3.5" fill="${l.color}" stroke="var(--surface)" stroke-width="1.5"/>`;});});
+  weekLabels.forEach((lbl,i)=>{els+=`<text x="${px(i).toFixed(1)}" y="${padT+chartH+15}" text-anchor="middle" font-size="10" fill="var(--sub)" font-family="system-ui">${lbl}</text>`;});
+  const legY=padT+chartH+padB+2;const iw=Math.floor(W/Math.min(lines.length,4));
+  const FOLDER_PATH=`<path d="M1 2.5C1 1.67 1.67 1 2.5 1h4.17c.46 0 .9.2 1.2.54L9.5 3H17.5C18.33 3 19 3.67 19 4.5v9c0 .83-.67 1.5-1.5 1.5h-15C1.67 15 1 14.33 1 13.5V2.5z" opacity=".35"/><path d="M1 5.5C1 4.67 1.67 4 2.5 4H17.5C18.33 4 19 4.67 19 5.5V13.5C19 14.33 18.33 15 17.5 15h-15C1.67 15 1 14.33 1 13.5V5.5z"/>`;
+  lines.forEach((l,i)=>{const x=(i%4)*iw;const y=legY+(Math.floor(i/4)*16);const lbl=l.label.length>10?l.label.slice(0,10)+'…':l.label;els+=`<rect x="${x}" y="${y}" width="9" height="9" rx="1.5" fill="${l.color}"/>`;if(l.isParent){els+=`<g transform="translate(${x+13},${y-1}) scale(0.475)" fill="var(--sub)">${FOLDER_PATH}</g><text x="${x+24}" y="${y+8}" font-size="11" fill="var(--text)" font-family="system-ui">${lbl}</text>`;}else{els+=`<text x="${x+13}" y="${y+8}" font-size="11" fill="var(--text)" font-family="system-ui">${lbl}</text>`;}});
+  const H=legY+Math.ceil(lines.length/4)*16+6;
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">${els}</svg>`;
+}
 
 // ══ DRAG SORT (single list) ══
 function makeSortable(container, selector, onEnd, handleSel='.drag-handle'){
@@ -781,35 +878,55 @@ function makeSortable(container, selector, onEnd, handleSel='.drag-handle'){
 }
 
 // ══ CROSS-GROUP DRAG (habits management) ══
-function makeCrossGroupSortable(wrapper, onEnd){
-  let drag=null,ghost=null,offsetX=0,offsetY=0,lastTarget=null;
+function makeCrossGroupSortable(wrapper,callbacks,opts={}){
+  const ITEM=opts.itemSel||'.mgmt-item';
+  const SUB=opts.subItemSel||'.sub-item';
+  const PROXY_CLS=opts.proxyClass||'mgmt-item';
+  const onReorder=typeof callbacks==='function'?callbacks:(callbacks.onReorder||callbacks);
+  const onNest=typeof callbacks==='function'?null:callbacks.onNest;
+  const onPromote=typeof callbacks==='function'?null:callbacks.onPromote;
+  const onNestSub=typeof callbacks==='function'?null:callbacks.onNestSub;
+  let drag=null,ghost=null,offsetX=0,offsetY=0,lastTarget=null,nestTarget=null,proxyEl=null,dragHasChildren=false;
   const cy=e=>e.touches?e.touches[0].clientY:e.clientY;
   const cx=e=>e.touches?e.touches[0].clientX:e.clientX;
   function allGroupItems(){return[...wrapper.querySelectorAll('.group-items')]}
   function groupOf(el){return el.closest('.group-items')}
   function insertAt(group,y){
-    const items=[...group.querySelectorAll('.mgmt-item')].filter(i=>i!==drag);
+    const items=[...group.querySelectorAll(ITEM)].filter(i=>i!==drag);
     let before=null;
     for(const el of items){const r=el.getBoundingClientRect();if(y<r.top+r.height/2){before=el;break}}
     before?group.insertBefore(drag,before):group.appendChild(drag);
   }
   function targetGroupAt(x,y){
-    // find group-section containing cursor
     for(const sec of wrapper.querySelectorAll('.group-section')){
       const r=sec.getBoundingClientRect();
       if(x>=r.left&&x<=r.right&&y>=r.top-16&&y<=r.bottom+16)return sec.querySelector('.group-items');
     }
     return null;
   }
-  wrapper.addEventListener('mousedown',start);
-  wrapper.addEventListener('touchstart',start,{passive:false});
+  function clearNest(){if(nestTarget){nestTarget.classList.remove('nest-candidate');nestTarget=null;}}
+  wrapper.addEventListener('mousedown',start);wrapper.addEventListener('touchstart',start,{passive:false});
   function start(e){
     const h=e.target.closest('.drag-handle');if(!h)return;
-    const item=h.closest('.mgmt-item');if(!item)return;
-    drag=item;
-    const r=drag.getBoundingClientRect();offsetX=cx(e)-r.left;offsetY=cy(e)-r.top;
-    ghost=drag.cloneNode(true);ghost.className='drag-ghost';
-    ghost.style.cssText=`width:${r.width}px;top:${r.top}px;left:${r.left}px`;
+    const subItem=onPromote?h.closest(SUB):null;
+    const mgmtItem=h.closest(ITEM);
+    if(subItem){
+      proxyEl=document.createElement('div');
+      proxyEl.className=PROXY_CLS;proxyEl.dataset.id=subItem.dataset.id;
+      proxyEl.style.cssText='opacity:0;min-height:40px;pointer-events:none;';
+      const parentMgmt=subItem.closest(ITEM);
+      const gi=parentMgmt?.closest('.group-items');if(!gi)return;
+      gi.insertBefore(proxyEl,parentMgmt.nextSibling);
+      drag=proxyEl;subItem.style.opacity='0.25';
+      const r=subItem.getBoundingClientRect();offsetX=cx(e)-r.left;offsetY=cy(e)-r.top;
+      ghost=subItem.cloneNode(true);ghost.className='drag-ghost';
+      ghost.style.cssText=`width:${r.width}px;top:${r.top}px;left:${r.left}px`;
+    } else if(mgmtItem){
+      drag=mgmtItem;dragHasChildren=DB.subHabits(drag.dataset.id).length>0;
+      const r=drag.getBoundingClientRect();offsetX=cx(e)-r.left;offsetY=cy(e)-r.top;
+      ghost=drag.cloneNode(true);ghost.className='drag-ghost';
+      ghost.style.cssText=`width:${r.width}px;top:${r.top}px;left:${r.left}px`;
+    } else return;
     document.body.appendChild(ghost);drag.classList.add('is-dragging');
     document.addEventListener('mousemove',move);document.addEventListener('touchmove',move,{passive:false});
     document.addEventListener('mouseup',end,{once:true});document.addEventListener('touchend',end,{once:true});
@@ -818,14 +935,24 @@ function makeCrossGroupSortable(wrapper, onEnd){
   function move(e){
     const x=cx(e),y=cy(e);
     ghost.style.top=(y-offsetY)+'px';ghost.style.left=(x-offsetX)+'px';
+    clearNest();
     const tg=targetGroupAt(x,y);
     if(tg){
       if(tg!==lastTarget){
         allGroupItems().forEach(g=>g.closest('.group-section')?.classList.remove('drag-target'));
-        tg.closest('.group-section')?.classList.add('drag-target');
-        lastTarget=tg;
+        tg.closest('.group-section')?.classList.add('drag-target');lastTarget=tg;
       }
-      insertAt(tg,y);
+      const canNest=(!proxyEl&&onNest&&!dragHasChildren)||(proxyEl&&onNestSub);
+      if(canNest){
+        const items=[...tg.querySelectorAll(ITEM)].filter(i=>i!==drag);
+        let hoverItem=null;
+        for(const el of items){const r=el.getBoundingClientRect();if(y>=r.top&&y<=r.bottom){hoverItem=el;break}}
+        if(hoverItem){
+          const r=hoverItem.getBoundingClientRect();const rel=(y-r.top)/r.height;
+          if(rel>=0.28&&rel<=0.72){nestTarget=hoverItem;hoverItem.classList.add('nest-candidate');}
+          else insertAt(tg,y);
+        } else insertAt(tg,y);
+      } else insertAt(tg,y);
     }
     if(e.cancelable)e.preventDefault();
   }
@@ -833,11 +960,32 @@ function makeCrossGroupSortable(wrapper, onEnd){
     if(!drag)return;
     allGroupItems().forEach(g=>g.closest('.group-section')?.classList.remove('drag-target'));
     drag.classList.remove('is-dragging');ghost.remove();
-    const finalGroup=groupOf(drag);
-    const newGroupId=finalGroup?finalGroup.closest('.group-section')?.dataset.gid||null:null;
-    const newOrder=[...finalGroup.querySelectorAll('.mgmt-item')].map(el=>el.dataset.id);
-    onEnd({habitId:drag.dataset.id,newGroupId,newOrder});
-    drag=null;ghost=null;lastTarget=null;
+    if(proxyEl){
+      const subId=proxyEl.dataset.id;
+      if(nestTarget){
+        const newParentId=nestTarget.dataset.id;clearNest();
+        proxyEl.remove();proxyEl=null;
+        wrapper.querySelector(`${SUB}[data-id="${subId}"]`)?.style.removeProperty('opacity');
+        if(onNestSub)onNestSub({subId,newParentId});
+      }else{
+        const finalGroup=groupOf(proxyEl);
+        const newGroupId=finalGroup?finalGroup.closest('.group-section')?.dataset.gid||null:null;
+        const allIds=[...finalGroup?.querySelectorAll(ITEM)||[]].map(el=>el.dataset.id);
+        proxyEl.remove();proxyEl=null;
+        wrapper.querySelector(`${SUB}[data-id="${subId}"]`)?.style.removeProperty('opacity');
+        if(onPromote)onPromote({subId,newGroupId,newOrder:allIds});
+      }
+    } else if(nestTarget){
+      const parentId=nestTarget.dataset.id;clearNest();
+      if(onNest)onNest({habitId:drag.dataset.id,parentId});
+    } else {
+      clearNest();
+      const finalGroup=groupOf(drag);
+      const newGroupId=finalGroup?finalGroup.closest('.group-section')?.dataset.gid||null:null;
+      const newOrder=[...finalGroup.querySelectorAll(ITEM)].map(el=>el.dataset.id);
+      onReorder({habitId:drag.dataset.id,newGroupId,newOrder});
+    }
+    drag=null;ghost=null;lastTarget=null;nestTarget=null;dragHasChildren=false;
     document.removeEventListener('mousemove',move);document.removeEventListener('touchmove',move);
   }
 }
@@ -906,7 +1054,7 @@ class AC{
 }
 
 // ══ SHARED HELPERS ══
-function createHabit(name){return{id:uid(),name,isFocus:false,groupId:null,createdAt:localISO()}}
+function createHabit(name,parentId=null){const h={id:uid(),name,isFocus:false,groupId:null,createdAt:localISO()};if(parentId)h.parentId=parentId;return h;}
 function getOrCreateHabitId(name){
   const all=DB.habits();const ex=all.find(h=>h.name===name);
   if(ex)return ex.id;
@@ -915,7 +1063,9 @@ function getOrCreateHabitId(name){
 function optFromHabit(h){return{id:h.id,label:h.name}}
 function getHabitOptions(q,excludeIds=[]){
   const excl=new Set(excludeIds);
-  return DB.habits().filter(h=>!excl.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(optFromHabit);
+  // exclude habits that are parent headers (have sub-habits under them)
+  const parentIds=new Set(DB.habits().filter(h=>h.parentId).map(h=>h.parentId));
+  return DB.habits().filter(h=>!excl.has(h.id)&&!parentIds.has(h.id)&&(!q||h.name.toLowerCase().includes(q))).map(optFromHabit);
 }
 function resolveOpt(opt){
   if(opt.type==='create')return getOrCreateHabitId(opt.label);
@@ -956,17 +1106,22 @@ function startSlotReplace(div,currentId,dk,onChange){
 }
 
 // ══ MAKE SLOT ITEM ══
-function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onChange){
+function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false,parentName=null,isParent=false,subCount=0,isSub=false,isParentContainer=false}={},onChange){
   const div=document.createElement('div');
-  div.className=`slot-item${isDone?' done':''}${isFocus?' is-focus':''}`;
+  div.className=`slot-item${isDone?' done':''}${isFocus?' is-focus':''}${isParent?' is-parent':''}`;
   div.dataset.id=h.id;
+  const nameHtml=parentName
+    ?`<div class="slot-name-wrap"><span class="slot-name">${h.name}</span><span class="slot-parent-tag">${SVG.folder}${parentName}</span></div>`
+    :`<span class="slot-name">${h.name}</span>`;
   const ct=isDone?DB.getCompTimeOnDay(h.id,dk):null;
   if(isDone){
     // Done: drag handle + checkbox (click to restore) + name + time — NO × or 恢復 button
     div.innerHTML=`
       <span class="drag-handle">${SVG.grip}</span>
       ${showCheck?`<button class="check-btn on" type="button" title="點擊恢復">${SVG.check}</button>`:''}
-      <span class="slot-name">${h.name}</span>
+      ${nameHtml}
+      ${isParent?`<span class="slot-parent-icon">${SVG.folder}</span>`:''}
+      ${isParent&&subCount>0?`<span class="slot-sub-count">·${subCount}</span>`:''}
       ${ct?`<span class="slot-time">${fmtTime(ct)}</span>`:''}
     `;
     if(showCheck){
@@ -996,11 +1151,13 @@ function makeSlotItem(h,dk,{showCheck=false,isDone=false,isFocus=false}={},onCha
       attachTimeClick();
     }
   } else {
-    // Pending: drag handle + checkbox + name (click to replace) + ×
+    // Pending: drag handle + checkbox + name (click to replace) + sub-count + ×
     div.innerHTML=`
       <span class="drag-handle">${SVG.grip}</span>
       ${showCheck?`<button class="check-btn" type="button">${SVG.check}</button>`:''}
-      <span class="slot-name">${h.name}</span>
+      ${nameHtml}
+      ${isParent?`<span class="slot-parent-icon">${SVG.folder}</span>`:''}
+      ${isParent&&subCount>0?`<span class="slot-sub-count">·${subCount}</span>`:''}
       <button class="rm-slot-btn" type="button">×</button>
     `;
     if(showCheck){
@@ -1025,12 +1182,16 @@ function renderDaySlots(container,dk,{showCheck=false}={},onUpdate){
   function refresh(){onUpdate?onUpdate():renderDaySlots(container,dk,{showCheck},null)}
   const pending=order.filter(id=>hmap[id]&&(!showCheck||!DB.isDoneOnDay(id,dk)));
   const list=document.createElement('div');list.className='slot-list';
-  pending.forEach(id=>list.appendChild(makeSlotItem(hmap[id],dk,{showCheck,isDone:false,isFocus:focusSet.has(id)},refresh)));
+  pending.forEach(id=>{
+    const h=hmap[id];if(!h)return;
+    const parentName=h.parentId&&hmap[h.parentId]?hmap[h.parentId].name:null;
+    const subs=DB.subHabits(id);const isParent=subs.length>0;
+    list.appendChild(makeSlotItem(h,dk,{showCheck,isDone:false,isFocus:focusSet.has(id),parentName,isParent,subCount:subs.length},refresh));
+  });
   container.appendChild(list);
-  // all pending items draggable (including focus)
   makeSortable(list,'.slot-item',newOrder=>{
     const doneIds=showCheck?order.filter(id=>hmap[id]&&DB.isDoneOnDay(id,dk)):[];
-    Hist.label('重新排序排程');DB.setDay(dk,[...newOrder,...doneIds]);
+    Hist.label('重新排序排程');DB.setDay(dk,[...newOrder.filter(id=>!doneIds.includes(id)),...doneIds]);refresh();
   });
   const acWrap=document.createElement('div');acWrap.className='ac-wrap';
   const acInp=document.createElement('input');acInp.className='ac-input';acInp.placeholder='請增加新的習慣…';acInp.autocomplete='off';
@@ -1040,7 +1201,9 @@ function renderDaySlots(container,dk,{showCheck=false}={},onUpdate){
     getOptions(q){const cur=new Set(DB.getDay(dk)||[]);return getHabitOptions(q,[...cur])},
     onSelect(opt){
       const id=resolveOpt(opt);const ord=DB.getOrCreateDay(dk);
-      if(!ord.includes(id)){Hist.label(`新增「${opt.label}」到排程`);DB.setDay(dk,[...ord,id]);showToast(`已加入「${opt.label}」`);}refresh();
+      if(!ord.includes(id)){Hist.label(`新增「${opt.label}」到排程`);DB.setDay(dk,[...ord,id]);showToast(`已加入「${opt.label}」`);}
+      DB.removeAutoFocus(dk,id); // 手動加入 → 不算自動注入，取消重點培養時不會被移除
+      refresh();
     }
   });
 }
@@ -1075,7 +1238,13 @@ const Pages={
       const list=document.getElementById('home-done-list');list.innerHTML='';
       if(done.length){
         wrap.style.display='block';const self=this;
-        done.forEach(id=>list.appendChild(makeSlotItem(hmap[id],dk,{showCheck:true,isDone:true,isFocus:focusSet.has(id)},()=>{self.renderToday();self.renderDoneSection();})));
+        done.forEach(id=>{
+          const h=hmap[id];if(!h)return;
+          const cb=()=>{self.renderToday();self.renderDoneSection();};
+          const parentName=h.parentId&&hmap[h.parentId]?hmap[h.parentId].name:null;
+          const subs=DB.subHabits(id);const isParent=subs.length>0;
+          list.appendChild(makeSlotItem(h,dk,{showCheck:true,isDone:true,isFocus:focusSet.has(id),parentName,isParent,subCount:subs.length},cb));
+        });
         makeSortable(list,'.slot-item',newDoneOrder=>{
           const pending=order.filter(id=>hmap[id]&&!DB.isDoneOnDay(id,dk));
           DB.setDay(dk,[...pending,...newDoneOrder]);
@@ -1146,61 +1315,147 @@ const Pages={
       chips.innerHTML=[{k:'count',l:'次數'},{k:'group',l:'群組'},{k:'recent',l:'更新'}]
         .map(s=>`<button class="sort-chip${sk===s.k?' on':''}" data-s="${s.k}">${s.l}</button>`).join('');
       chips.querySelectorAll('.sort-chip').forEach(btn=>btn.addEventListener('click',()=>{S.set(K.statsort,btn.dataset.s);this.render()}));
+      const chartBtn=document.createElement('button');
+      chartBtn.className=`sort-chip${_statsChartMode?' on':''}`;
+      chartBtn.textContent=_statsChartMode==='pie'?'餅圖':_statsChartMode==='line'?'折線':'圖表';
+      chartBtn.addEventListener('click',()=>{const modes=['','pie','line'];_statsChartMode=modes[(modes.indexOf(_statsChartMode)+1)%modes.length];this.render();});
+      chips.appendChild(chartBtn);
       const habits=DB.habits();const comps=DB.comps();const el=document.getElementById('stats-list');
       if(!habits.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📊</div>還沒有習慣統計</div>`;return}
       const map={};habits.forEach(h=>{map[h.id]=[]});
       comps.forEach(c=>{if(map[c.habitId])map[c.habitId].push(c)});
 
+      const parentIds=new Set(habits.filter(h=>h.parentId).map(h=>h.parentId));
+      const topLevel=habits.filter(h=>!h.parentId);
+      function parentTotal(h){return(map[h.id]||[]).length+DB.subHabits(h.id).reduce((s,sub)=>s+(map[sub.id]||[]).length,0);}
+      function getCount(h){return parentIds.has(h.id)?parentTotal(h):(map[h.id]||[]).length;}
+
       function makeStatItem(h){
         const hc=(map[h.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
-        return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${hc.length}次</span>${SVG.chev}</div><div class="stat-history">${hc.length?hc.map(c=>`<div class="hist-entry" data-id="${c.id}">${fmtDateTime(c.at)}</div>`).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
+        const sc=hc.length>3?' hist-scroll':'';
+        const histHtml=c=>`<div class="hist-entry" data-id="${c.id}"><span class="hist-time">${fmtDateTime(c.at)}</span><button class="hist-del-btn" type="button" title="刪除">×</button></div>`;
+        return`<div class="stat-item${h.isFocus?' is-focus':''}"><div class="stat-row"><span class="stat-name">${h.name}</span><span class="stat-count">${hc.length}次</span>${SVG.chev}</div><div class="stat-history${sc}">${hc.length?hc.map(histHtml).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
       }
 
+      function makeParentStatItemEl(h){
+        const total=parentTotal(h);const subs=DB.subHabits(h.id);const direct=map[h.id]||[];
+        const div=document.createElement('div');div.className=`stat-item stat-parent${h.isFocus?' is-focus':''}`;
+        const subsHtml=subs.map((sub,i)=>{
+          const sc=(map[sub.id]||[]).slice().sort((a,b)=>b.at.localeCompare(a.at));
+          const scrollCls=sc.length>3?' hist-scroll':'';
+          const eHtml=c=>`<div class="hist-entry" data-id="${c.id}"><span class="hist-time">${fmtDateTime(c.at)}</span><button class="hist-del-btn" type="button" title="刪除">×</button></div>`;
+          return`<div class="stat-sub-section"><div class="stat-sub-hdr"><div class="stat-sub-dot" style="background:${CHART_COLORS[i%CHART_COLORS.length]}"></div><span class="stat-sub-name">${sub.name}</span><span class="stat-count">${sc.length}次</span>${SVG.chev}</div><div class="stat-sub-history${scrollCls}">${sc.length?sc.map(eHtml).join(''):`<div class="hist-entry" style="color:var(--done)">尚無紀錄</div>`}</div></div>`;
+        }).join('');
+        const dSorted=direct.slice().sort((a,b)=>b.at.localeCompare(a.at));
+        const dScrollCls=dSorted.length>3?' hist-scroll':'';
+        const dEHtml=c=>`<div class="hist-entry" data-id="${c.id}"><span class="hist-time">${fmtDateTime(c.at)}</span><button class="hist-del-btn" type="button" title="刪除">×</button></div>`;
+        const directHtml=direct.length?`<div class="stat-sub-section"><div class="stat-sub-hdr"><div class="stat-sub-dot" style="background:${CHART_COLORS[subs.length%CHART_COLORS.length]}"></div><span class="stat-sub-name">（未分類）</span><span class="stat-count">${direct.length}次</span>${SVG.chev}</div><div class="stat-sub-history${dScrollCls}">${dSorted.map(dEHtml).join('')}</div></div>`:'';
+        div.innerHTML=`
+          <div class="stat-row">
+            <span class="stat-name stat-parent-name">${SVG.folder}${h.name}</span>
+            <span class="stat-count">${total}次</span>
+            <button class="stat-chart-toggle">圖表</button>
+            ${SVG.chev}
+          </div>
+          <div class="stat-history"><div class="stat-chart-area"></div>${subsHtml}${directHtml}</div>`;
+        div.querySelector('.stat-row').addEventListener('click',e=>{if(!e.target.closest('.stat-chart-toggle'))div.classList.toggle('open');});
+        div.querySelectorAll('.stat-sub-hdr').forEach(hdr=>{hdr.addEventListener('click',e=>{e.stopPropagation();hdr.closest('.stat-sub-section').classList.toggle('open');});});
+        const chartArea=div.querySelector('.stat-chart-area');
+        div.querySelector('.stat-chart-toggle').addEventListener('click',e=>{
+          e.stopPropagation();if(!div.classList.contains('open'))div.classList.add('open');
+          const modes=['pie','line',''];const next=modes[(modes.indexOf(chartArea.dataset.mode||'')+1)%modes.length];
+          chartArea.dataset.mode=next;chartArea.innerHTML='';
+          if(!next)return;
+          const slices=[
+            ...subs.map((sub,i)=>({label:sub.name,count:(map[sub.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length]})),
+            ...(direct.length?[{label:'未分類',count:direct.length,color:CHART_COLORS[subs.length%CHART_COLORS.length]}]:[])
+          ];
+          if(next==='pie'){chartArea.innerHTML=makePieSVG(slices);}
+          else{
+            const wk=getWeeks(8);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});
+            function wd(cl){return wk.map((ws,i)=>{const we=wk[i+1]||'9999-99-99';return cl.filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;});}
+            const lines=[
+              ...subs.map((sub,i)=>({label:sub.name,data:wd(map[sub.id]||[]),color:CHART_COLORS[i%CHART_COLORS.length]})),
+              ...(direct.length?[{label:'未分類',data:wd(direct),color:CHART_COLORS[subs.length%CHART_COLORS.length]}]:[])
+            ];
+            chartArea.innerHTML=makeLineSVG(lines,lbs);
+          }
+        });
+        return div;
+      }
+
+      function appendList(list){
+        const sorted=[...list].sort((a,b)=>(parentIds.has(b.id)?1:0)-(parentIds.has(a.id)?1:0));
+        sorted.forEach(h=>{
+          if(parentIds.has(h.id)){el.appendChild(makeParentStatItemEl(h));}
+          else{const t=document.createElement('div');t.innerHTML=makeStatItem(h);if(t.firstChild)el.appendChild(t.firstChild);}
+        });
+      }
+
+      // ── global chart ──
+      const gcEl=document.getElementById('stats-global-chart');gcEl.innerHTML='';
+      if(_statsChartMode&&habits.length){
+        const allSorted=[...habits].filter(h=>(map[h.id]||[]).length>0).sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
+        if(_statsChartMode==='pie'){
+          const slices=allSorted.slice(0,14).map((h,i)=>({label:h.name,count:(map[h.id]||[]).length,color:CHART_COLORS[i%CHART_COLORS.length],isParent:parentIds.has(h.id)}));
+          gcEl.innerHTML=makePieSVG(slices);
+        }else{
+          const wk=getWeeks(8);const lbs=wk.map((w,i)=>{if(i===wk.length-1)return'本週';const p=w.slice(5).split('-');return(+p[0])+'/'+parseInt(p[1]);});
+          const lines=allSorted.slice(0,8).map((h,i)=>({label:h.name,data:wk.map((ws,i2)=>{const we=wk[i2+1]||'9999-99-99';return(map[h.id]||[]).filter(c=>c.at.slice(0,10)>=ws&&c.at.slice(0,10)<we).length;}),color:CHART_COLORS[i%CHART_COLORS.length],isParent:parentIds.has(h.id)}));
+          gcEl.innerHTML=makeLineSVG(lines,lbs);
+        }
+      }
+
+      el.innerHTML='';
       if(sk==='group'){
         const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
-        const groupMap={};habits.forEach(h=>{const gid=h.groupId||'';if(!groupMap[gid])groupMap[gid]=[];groupMap[gid].push(h)});
-        let html='';
+        const groupMap={};topLevel.forEach(h=>{const gid=h.groupId||'';if(!groupMap[gid])groupMap[gid]=[];groupMap[gid].push(h)});
         groups.forEach(g=>{
           const hs=(groupMap[g.id]||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));if(!hs.length)return;
-          html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label">${g.name}</div><div class="group-line"></div></div>`;
-          html+=hs.map(makeStatItem).join('');
+          const ghdr=document.createElement('div');ghdr.className='group-header';ghdr.style.cssText='margin-top:14px;margin-bottom:6px';
+          ghdr.innerHTML=`<div class="group-label">${g.name}</div><div class="group-line"></div>`;
+          el.appendChild(ghdr);appendList(hs);
         });
         const ungrouped=(groupMap['']||[]).slice().sort((a,b)=>(a.groupOrder||0)-(b.groupOrder||0));
         if(ungrouped.length){
-          html+=`<div class="group-header" style="margin-top:14px;margin-bottom:6px"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
-          html+=ungrouped.map(makeStatItem).join('');
+          const ghdr=document.createElement('div');ghdr.className='group-header';ghdr.style.cssText='margin-top:14px;margin-bottom:6px';
+          ghdr.innerHTML=`<div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div>`;
+          el.appendChild(ghdr);appendList(ungrouped);
         }
-        el.innerHTML=html;
       }else{
-        let sorted=[...habits];
-        if(sk==='count')sorted.sort((a,b)=>(map[b.id]||[]).length-(map[a.id]||[]).length);
-        else if(sk==='name')sorted.sort((a,b)=>a.name.localeCompare(b.name,'zh'));
+        let sorted=[...topLevel];
+        if(sk==='count')sorted.sort((a,b)=>getCount(b)-getCount(a));
         else if(sk==='recent')sorted.sort((a,b)=>{
           const al=(map[a.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
           const bl=(map[b.id]||[]).slice().sort((x,y)=>x.at.localeCompare(y.at)).pop()?.at||'';
           return bl.localeCompare(al);
         });
-        el.innerHTML=sorted.map(makeStatItem).join('');
+        appendList(sorted);
       }
-      el.querySelectorAll('.stat-item').forEach(item=>{
+      el.querySelectorAll('.stat-item:not(.stat-parent)').forEach(item=>{
         item.querySelector('.stat-row').addEventListener('click',()=>item.classList.toggle('open'));
       });
       el.querySelectorAll('.hist-entry[data-id]').forEach(entry=>{
+        const cid=entry.dataset.id;
+        // delete button
+        entry.querySelector('.hist-del-btn')?.addEventListener('click',e=>{
+          e.stopPropagation();
+          const comp=DB.comps().find(c=>c.id===cid);if(!comp)return;
+          showConfirm('確定刪除此筆紀錄？',fmtDateTime(comp.at),()=>{
+            const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
+            if(idx!==-1){Hist.label('刪除打勾紀錄');all.splice(idx,1);DB.saveComps(all);showToast('已刪除');}
+            Pages.stats.render();
+          });
+        });
+        // time edit
         function attachClick(){
-          entry.addEventListener('click',function onClick(){
-            entry.removeEventListener('click',onClick);
-            const cid=entry.dataset.id;
+          const timeEl=entry.querySelector('.hist-time')||entry;
+          timeEl.addEventListener('click',function onClick(){
+            timeEl.removeEventListener('click',onClick);
             const comp=DB.comps().find(c=>c.id===cid);
             if(!comp){attachClick();return;}
             showDateTimeModal(comp.at.slice(0,16),newVal=>{
-              if(newVal){
-                const newAt=newVal+':00';
-                if(newAt!==comp.at){
-                  const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);
-                  if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}
-                  entry.textContent=fmtDateTime(newAt);flashEl(entry);
-                }
-              }
+              if(newVal){const newAt=newVal+':00';if(newAt!==comp.at){const all=DB.comps();const idx=all.findIndex(c=>c.id===cid);if(idx!==-1){Hist.label('修改完成時間');all[idx].at=newAt;DB.saveComps(all);showToast('已更新時間');}(entry.querySelector('.hist-time')||entry).textContent=fmtDateTime(newAt);flashEl(entry);Pages.stats.render();}}
               attachClick();
             });
           });
@@ -1217,9 +1472,9 @@ const Pages={
       const groups=[...DB.groups()].sort((a,b)=>(a.order||0)-(b.order||0));
       const habits=DB.habits();const self=this;
       const wrapper=document.createElement('div');wrapper.id='groups-wrap';
-      groups.forEach(g=>{wrapper.appendChild(self.makeGroupSection(g,habits.filter(h=>h.groupId===g.id),self))});
-      // ungrouped
-      const ungrouped=habits.filter(h=>!h.groupId||!groups.find(g=>g.id===h.groupId));
+      groups.forEach(g=>{wrapper.appendChild(self.makeGroupSection(g,habits.filter(h=>h.groupId===g.id&&!h.parentId),self))});
+      // ungrouped (top-level only)
+      const ungrouped=habits.filter(h=>(!h.groupId||!groups.find(g=>g.id===h.groupId))&&!h.parentId);
       if(ungrouped.length){
         const sec=document.createElement('div');sec.className='group-section';sec.dataset.gid='';
         sec.innerHTML=`<div class="group-header"><div class="group-label" style="color:var(--done)">未分類</div><div class="group-line"></div></div>`;
@@ -1229,11 +1484,28 @@ const Pages={
       }
       cont.appendChild(wrapper);
       // cross-group drag
-      makeCrossGroupSortable(wrapper,({habitId,newGroupId,newOrder})=>{
-        const all=DB.habits();const h=all.find(x=>x.id===habitId);
-        if(h)h.groupId=newGroupId||null;
-        newOrder.forEach((id,i)=>{const x=all.find(h=>h.id===id);if(x)x.groupOrder=i});
-        Hist.label('移動習慣');DB.saveHabits(all);self.render();
+      makeCrossGroupSortable(wrapper,{
+        onReorder({habitId,newGroupId,newOrder}){
+          const all=DB.habits();const h=all.find(x=>x.id===habitId);
+          if(h)h.groupId=newGroupId||null;
+          newOrder.forEach((id,i)=>{const x=all.find(h=>h.id===id);if(x)x.groupOrder=i});
+          Hist.label('移動習慣');DB.saveHabits(all);self.render();
+        },
+        onNest({habitId,parentId}){
+          const all=DB.habits();const h=all.find(x=>x.id===habitId);const p=all.find(x=>x.id===parentId);
+          if(h&&p){h.parentId=parentId;h.groupId=p.groupId||null;Hist.label(`將「${h.name}」加入「${p.name}」子習慣`);DB.saveHabits(all);showToast(`「${h.name}」已成為「${p.name}」的子習慣`);}
+          self.render();
+        },
+        onPromote({subId,newGroupId,newOrder}){
+          const all=DB.habits();const h=all.find(x=>x.id===subId);
+          if(h){delete h.parentId;h.groupId=newGroupId||null;newOrder.forEach((id,i)=>{const x=all.find(h=>h.id===id);if(x)x.groupOrder=i});Hist.label(`升格「${h.name}」為獨立習慣`);DB.saveHabits(all);showToast(`「${h.name}」已升格`);}
+          self.render();
+        },
+        onNestSub({subId,newParentId}){
+          const all=DB.habits();const h=all.find(x=>x.id===subId);const p=all.find(x=>x.id===newParentId);
+          if(h&&p&&p.id!==h.parentId){h.parentId=newParentId;h.groupId=p.groupId||null;Hist.label(`移動「${h.name}」到「${p.name}」`);DB.saveHabits(all);showToast(`「${h.name}」已移到「${p.name}」`);}
+          self.render();
+        }
       });
       makeSortable(wrapper,'.group-section[data-gid]:not([data-gid=""])',newGOrder=>{
         const all=DB.groups();newGOrder.forEach((id,i)=>{const g=all.find(x=>x.id===id);if(g)g.order=i});
@@ -1288,11 +1560,15 @@ const Pages={
     makeHabitItem(h,self){
       const div=document.createElement('div');
       div.className=`mgmt-item${h.isFocus?' is-focus':''}`;div.dataset.id=h.id;
+      const isParentHabit=DB.subHabits(h.id).length>0;
       div.innerHTML=`
-        <span class="drag-handle">${SVG.grip}</span>
-        <span class="mgmt-name">${h.name}</span>
-        <button class="focus-toggle${h.isFocus?' on':''}">${h.isFocus?'重點培養 ✓':'重點培養'}</button>
-        <button class="del-btn">${SVG.x}</button>
+        <div class="habit-row">
+          <span class="drag-handle">${SVG.grip}</span>
+          ${isParentHabit?`<span class="mgmt-parent-icon">${SVG.folder}</span>`:''}
+          <span class="mgmt-name">${h.name}</span>
+          <button class="focus-toggle${h.isFocus?' on':''}">${h.isFocus?'重點培養 ✓':'重點培養'}</button>
+          <button class="del-btn">${SVG.x}</button>
+        </div>
       `;
       // inline name edit
       div.querySelector('.mgmt-name').addEventListener('click',()=>{
@@ -1311,15 +1587,62 @@ const Pages={
       });
       // delete
       div.querySelector('.del-btn').addEventListener('click',()=>{
-        if(!isHabitReferenced(h.id)){
-          // 無引用，直接刪除
+        const subs=DB.subHabits(h.id);
+        const hasRef=isHabitReferenced(h.id);
+        if(!hasRef&&!subs.length){
           Hist.label(`刪除習慣「${h.name}」`);
           DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
           DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
         }else{
-          showConfirm(`刪除「${h.name}」？`,`排程與統計將一併移除`,()=>{
+          const body=subs.length?`子習慣將升格為獨立習慣，排程與統計將一併移除`:`排程與統計將一併移除`;
+          showConfirm(`刪除「${h.name}」？`,body,()=>{
             Hist.label(`刪除習慣「${h.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==h.id));
             DB.cleanupHabit(h.id);showToast(`已刪除「${h.name}」`);self.render();
+          });
+        }
+      });
+      // sub-habits
+      self.renderSubList(div,h,self);
+      return div;
+    },
+    renderSubList(parentDiv,h,self){
+      parentDiv.querySelectorAll('.sub-list').forEach(el=>el.remove());
+      const subs=DB.subHabits(h.id);
+      if(!subs.length)return;
+      const subList=document.createElement('div');subList.className='sub-list';
+      subs.forEach(sub=>subList.appendChild(self.makeSubHabitItem(sub,h,self)));
+      parentDiv.appendChild(subList);
+    },
+    makeSubHabitItem(sub,parent,self){
+      const div=document.createElement('div');div.className=`sub-item${sub.isFocus?' is-focus':''}`;div.dataset.id=sub.id;
+      div.innerHTML=`
+        <span class="drag-handle">${SVG.grip}</span>
+        <span class="sub-item-name">${sub.name}</span>
+        <button class="focus-toggle${sub.isFocus?' on':''}">${sub.isFocus?'重點培養 ✓':'重點培養'}</button>
+        <button class="del-btn">${SVG.x}</button>
+      `;
+      div.querySelector('.focus-toggle').addEventListener('click',()=>{
+        const all=DB.habits();const idx=all.findIndex(x=>x.id===sub.id);
+        if(idx!==-1){const nowFocus=!all[idx].isFocus;Hist.label(`${nowFocus?'設為':'取消'}重點培養「${sub.name}」`);all[idx].isFocus=nowFocus;DB.saveHabits(all);DB.syncFocusChange(sub.id,nowFocus);showToast(nowFocus?`「${sub.name}」設為重點培養`:`「${sub.name}」取消重點培養`);}
+        self.render();
+      });
+      div.querySelector('.sub-item-name').addEventListener('click',()=>{
+        const nameEl=div.querySelector('.sub-item-name');
+        const inp=document.createElement('input');inp.className='mgmt-name-input';inp.style.fontSize='14px';inp.value=sub.name;
+        nameEl.replaceWith(inp);inp.focus();inp.select();
+        function save(){const v=inp.value.trim();if(v&&v!==sub.name){Hist.label(`重新命名「${sub.name}」→「${v}」`);const all=DB.habits();const idx=all.findIndex(x=>x.id===sub.id);if(idx!==-1){all[idx].name=v;DB.saveHabits(all);showToast(`已更名為「${v}」`)}}self.render()}
+        inp.addEventListener('blur',save);
+        inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=sub.name;inp.blur()}});
+      });
+      div.querySelector('.del-btn').addEventListener('click',()=>{
+        if(!isHabitReferenced(sub.id)){
+          Hist.label(`刪除子習慣「${sub.name}」`);
+          DB.saveHabits(DB.habits().filter(x=>x.id!==sub.id));
+          DB.cleanupHabit(sub.id);showToast(`已刪除「${sub.name}」`);self.render();
+        }else{
+          showConfirm(`刪除「${sub.name}」？`,`排程與統計將一併移除`,()=>{
+            Hist.label(`刪除子習慣「${sub.name}」`);DB.saveHabits(DB.habits().filter(x=>x.id!==sub.id));
+            DB.cleanupHabit(sub.id);showToast(`已刪除「${sub.name}」`);self.render();
           });
         }
       });
